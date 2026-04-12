@@ -78,7 +78,7 @@ function parseNumberValue(value: unknown): number | null {
 }
 
 /* =========================
-   CATEGORY
+   CATEGORY (MODIFIED - GLOBAL)
 ========================= */
 
 export async function createCategory(req: Request, res: Response) {
@@ -87,40 +87,28 @@ export async function createCategory(req: Request, res: Response) {
     const merchantId = getMerchantIdFromHeader(req);
 
     if (!authUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
     if (!merchantId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Header x-merchant-id tidak valid',
-      });
+      return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
     }
 
     const parsed = createCategorySchema.safeParse(req.body);
 
     if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: parsed.error.issues[0]?.message || 'Validasi gagal',
-      });
+      return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Validasi gagal' });
     }
 
+    // mode insensitive dan equals sudah dihapus
     const existingCategory = await prisma.category.findFirst({
       where: {
-        merchantId,
-        name: parsed.data.name,
+        name: parsed.data.name
       },
     });
 
     if (existingCategory) {
-      return res.status(409).json({
-        success: false,
-        message: 'Kategori sudah ada',
-      });
+      return res.status(409).json({ success: false, message: 'Kategori sudah ada di sistem' });
     }
 
     const userId = BigInt(authUser.userId);
@@ -157,31 +145,19 @@ export async function createCategory(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('createCategory error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
 
 export async function getCategories(req: Request, res: Response) {
   try {
     const merchantId = getMerchantIdFromHeader(req);
-
     if (!merchantId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Header x-merchant-id tidak valid',
-      });
+      return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
     }
 
     const categories = await prisma.category.findMany({
-      where: {
-        merchantId,
-      },
-      orderBy: {
-        id: 'desc',
-      },
+      orderBy: { name: 'asc' },
     });
 
     return res.status(200).json({
@@ -193,10 +169,7 @@ export async function getCategories(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('getCategories error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
 
@@ -206,101 +179,52 @@ export async function updateCategory(req: Request, res: Response) {
     const merchantId = getMerchantIdFromHeader(req);
     const categoryIdRaw = getSingleParam(req.params.id);
 
-    if (!authUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
-    }
-
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
     if (!merchantId || !categoryIdRaw || !/^\d+$/.test(categoryIdRaw)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Data request tidak valid',
-      });
+      return res.status(400).json({ success: false, message: 'Data request tidak valid' });
     }
 
     const parsed = updateCategorySchema.safeParse(req.body);
-
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: parsed.error.issues[0]?.message || 'Validasi gagal',
-      });
-    }
+    if (!parsed.success) return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Validasi gagal' });
 
     const categoryId = BigInt(categoryIdRaw);
     const userId = BigInt(authUser.userId);
 
     const category = await prisma.category.findFirst({
-      where: {
-        id: categoryId,
-        merchantId,
-      },
+      where: { id: categoryId, merchantId },
     });
 
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: 'Kategori tidak ditemukan',
-      });
-    }
+    if (!category) return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan atau Anda tidak memiliki akses untuk mengubahnya' });
 
+    // mode insensitive dan equals sudah dihapus
     const duplicate = await prisma.category.findFirst({
       where: {
-        merchantId,
         name: parsed.data.name,
-        NOT: {
-          id: categoryId,
-        },
+        NOT: { id: categoryId },
       },
     });
 
-    if (duplicate) {
-      return res.status(409).json({
-        success: false,
-        message: 'Nama kategori sudah digunakan',
-      });
-    }
+    if (duplicate) return res.status(409).json({ success: false, message: 'Nama kategori sudah digunakan di sistem' });
 
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.category.update({
-        where: {
-          id: categoryId,
-        },
-        data: {
-          name: parsed.data.name,
-        },
+        where: { id: categoryId },
+        data: { name: parsed.data.name },
       });
 
       await tx.auditLog.create({
-        data: {
-          merchantId,
-          userId,
-          action: 'UPDATE_CATEGORY',
-          entity: 'Category',
-          entityId: result.id,
-          description: `Kategori diperbarui menjadi ${result.name}`,
-        },
+        data: { merchantId, userId, action: 'UPDATE_CATEGORY', entity: 'Category', entityId: result.id, description: `Kategori diperbarui menjadi ${result.name}` },
       });
-
       return result;
     });
 
     return res.status(200).json({
-      success: true,
-      message: 'Kategori berhasil diperbarui',
-      data: {
-        id: updated.id.toString(),
-        name: updated.name,
-      },
+      success: true, message: 'Kategori berhasil diperbarui',
+      data: { id: updated.id.toString(), name: updated.name },
     });
   } catch (error) {
     console.error('updateCategory error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
 
@@ -310,71 +234,36 @@ export async function deleteCategory(req: Request, res: Response) {
     const merchantId = getMerchantIdFromHeader(req);
     const categoryIdRaw = getSingleParam(req.params.id);
 
-    if (!authUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
-    }
-
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
     if (!merchantId || !categoryIdRaw || !/^\d+$/.test(categoryIdRaw)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Data request tidak valid',
-      });
+      return res.status(400).json({ success: false, message: 'Data request tidak valid' });
     }
 
     const categoryId = BigInt(categoryIdRaw);
     const userId = BigInt(authUser.userId);
 
     const category = await prisma.category.findFirst({
-      where: {
-        id: categoryId,
-        merchantId,
-      },
+      where: { id: categoryId, merchantId },
     });
 
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: 'Kategori tidak ditemukan',
-      });
-    }
+    if (!category) return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan atau Anda tidak berhak menghapusnya' });
 
     await prisma.$transaction(async (tx) => {
-      await tx.category.delete({
-        where: {
-          id: categoryId,
-        },
-      });
-
+      await tx.category.delete({ where: { id: categoryId } });
       await tx.auditLog.create({
-        data: {
-          merchantId,
-          userId,
-          action: 'DELETE_CATEGORY',
-          entity: 'Category',
-          entityId: categoryId,
-          description: `Kategori ${category.name} dihapus`,
-        },
+        data: { merchantId, userId, action: 'DELETE_CATEGORY', entity: 'Category', entityId: categoryId, description: `Kategori ${category.name} dihapus` },
       });
     });
 
-    return res.status(200).json({
-      success: true,
-      message: 'Kategori berhasil dihapus',
-    });
+    return res.status(200).json({ success: true, message: 'Kategori berhasil dihapus' });
   } catch (error) {
     console.error('deleteCategory error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Kategori tidak bisa dihapus karena masih dipakai atau terjadi kesalahan',
-    });
+    return res.status(500).json({ success: false, message: 'Kategori tidak bisa dihapus karena masih dipakai di produk' });
   }
 }
 
 /* =========================
-   UNIT
+   UNIT (MODIFIED - GLOBAL)
 ========================= */
 
 export async function createUnit(req: Request, res: Response) {
@@ -382,117 +271,58 @@ export async function createUnit(req: Request, res: Response) {
     const authUser = req.authUser;
     const merchantId = getMerchantIdFromHeader(req);
 
-    if (!authUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
-    }
-
-    if (!merchantId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Header x-merchant-id tidak valid',
-      });
-    }
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!merchantId) return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
 
     const parsed = createUnitSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Validasi gagal' });
 
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: parsed.error.issues[0]?.message || 'Validasi gagal',
-      });
-    }
-
+    // mode insensitive dan equals sudah dihapus
     const existingUnit = await prisma.unit.findFirst({
-      where: {
-        merchantId,
-        name: parsed.data.name,
-      },
+      where: { name: parsed.data.name },
     });
 
-    if (existingUnit) {
-      return res.status(409).json({
-        success: false,
-        message: 'Unit sudah ada',
-      });
-    }
+    if (existingUnit) return res.status(409).json({ success: false, message: 'Unit sudah ada di sistem' });
 
     const userId = BigInt(authUser.userId);
 
     const unit = await prisma.$transaction(async (tx) => {
       const created = await tx.unit.create({
-        data: {
-          merchantId,
-          name: parsed.data.name,
-        },
+        data: { merchantId, name: parsed.data.name },
       });
 
       await tx.auditLog.create({
-        data: {
-          merchantId,
-          userId,
-          action: 'CREATE_UNIT',
-          entity: 'Unit',
-          entityId: created.id,
-          description: `Unit ${created.name} berhasil dibuat`,
-        },
+        data: { merchantId, userId, action: 'CREATE_UNIT', entity: 'Unit', entityId: created.id, description: `Unit ${created.name} berhasil dibuat` },
       });
-
       return created;
     });
 
     return res.status(201).json({
-      success: true,
-      message: 'Unit berhasil dibuat',
-      data: {
-        id: unit.id.toString(),
-        name: unit.name,
-      },
+      success: true, message: 'Unit berhasil dibuat',
+      data: { id: unit.id.toString(), name: unit.name },
     });
   } catch (error) {
     console.error('createUnit error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
 
 export async function getUnits(req: Request, res: Response) {
   try {
     const merchantId = getMerchantIdFromHeader(req);
-
-    if (!merchantId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Header x-merchant-id tidak valid',
-      });
-    }
+    if (!merchantId) return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
 
     const units = await prisma.unit.findMany({
-      where: {
-        merchantId,
-      },
-      orderBy: {
-        id: 'desc',
-      },
+      orderBy: { name: 'asc' },
     });
 
     return res.status(200).json({
       success: true,
-      data: units.map((item) => ({
-        id: item.id.toString(),
-        name: item.name,
-      })),
+      data: units.map((item) => ({ id: item.id.toString(), name: item.name })),
     });
   } catch (error) {
     console.error('getUnits error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
 
@@ -502,101 +332,50 @@ export async function updateUnit(req: Request, res: Response) {
     const merchantId = getMerchantIdFromHeader(req);
     const unitIdRaw = getSingleParam(req.params.id);
 
-    if (!authUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
-    }
-
-    if (!merchantId || !unitIdRaw || !/^\d+$/.test(unitIdRaw)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Data request tidak valid',
-      });
-    }
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!merchantId || !unitIdRaw || !/^\d+$/.test(unitIdRaw)) return res.status(400).json({ success: false, message: 'Data request tidak valid' });
 
     const parsed = updateUnitSchema.safeParse(req.body);
-
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: parsed.error.issues[0]?.message || 'Validasi gagal',
-      });
-    }
+    if (!parsed.success) return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Validasi gagal' });
 
     const unitId = BigInt(unitIdRaw);
     const userId = BigInt(authUser.userId);
 
     const unit = await prisma.unit.findFirst({
-      where: {
-        id: unitId,
-        merchantId,
-      },
+      where: { id: unitId, merchantId },
     });
 
-    if (!unit) {
-      return res.status(404).json({
-        success: false,
-        message: 'Unit tidak ditemukan',
-      });
-    }
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit tidak ditemukan atau tidak berhak diakses' });
 
+    // mode insensitive dan equals sudah dihapus
     const duplicate = await prisma.unit.findFirst({
       where: {
-        merchantId,
         name: parsed.data.name,
-        NOT: {
-          id: unitId,
-        },
+        NOT: { id: unitId },
       },
     });
 
-    if (duplicate) {
-      return res.status(409).json({
-        success: false,
-        message: 'Nama unit sudah digunakan',
-      });
-    }
+    if (duplicate) return res.status(409).json({ success: false, message: 'Nama unit sudah digunakan di sistem' });
 
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.unit.update({
-        where: {
-          id: unitId,
-        },
-        data: {
-          name: parsed.data.name,
-        },
+        where: { id: unitId },
+        data: { name: parsed.data.name },
       });
 
       await tx.auditLog.create({
-        data: {
-          merchantId,
-          userId,
-          action: 'UPDATE_UNIT',
-          entity: 'Unit',
-          entityId: result.id,
-          description: `Unit diperbarui menjadi ${result.name}`,
-        },
+        data: { merchantId, userId, action: 'UPDATE_UNIT', entity: 'Unit', entityId: result.id, description: `Unit diperbarui menjadi ${result.name}` },
       });
-
       return result;
     });
 
     return res.status(200).json({
-      success: true,
-      message: 'Unit berhasil diperbarui',
-      data: {
-        id: updated.id.toString(),
-        name: updated.name,
-      },
+      success: true, message: 'Unit berhasil diperbarui',
+      data: { id: updated.id.toString(), name: updated.name },
     });
   } catch (error) {
     console.error('updateUnit error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
 
@@ -606,71 +385,34 @@ export async function deleteUnit(req: Request, res: Response) {
     const merchantId = getMerchantIdFromHeader(req);
     const unitIdRaw = getSingleParam(req.params.id);
 
-    if (!authUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
-    }
-
-    if (!merchantId || !unitIdRaw || !/^\d+$/.test(unitIdRaw)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Data request tidak valid',
-      });
-    }
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!merchantId || !unitIdRaw || !/^\d+$/.test(unitIdRaw)) return res.status(400).json({ success: false, message: 'Data request tidak valid' });
 
     const unitId = BigInt(unitIdRaw);
     const userId = BigInt(authUser.userId);
 
     const unit = await prisma.unit.findFirst({
-      where: {
-        id: unitId,
-        merchantId,
-      },
+      where: { id: unitId, merchantId },
     });
 
-    if (!unit) {
-      return res.status(404).json({
-        success: false,
-        message: 'Unit tidak ditemukan',
-      });
-    }
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit tidak ditemukan atau tidak berhak dihapus' });
 
     await prisma.$transaction(async (tx) => {
-      await tx.unit.delete({
-        where: {
-          id: unitId,
-        },
-      });
-
+      await tx.unit.delete({ where: { id: unitId } });
       await tx.auditLog.create({
-        data: {
-          merchantId,
-          userId,
-          action: 'DELETE_UNIT',
-          entity: 'Unit',
-          entityId: unitId,
-          description: `Unit ${unit.name} dihapus`,
-        },
+        data: { merchantId, userId, action: 'DELETE_UNIT', entity: 'Unit', entityId: unitId, description: `Unit ${unit.name} dihapus` },
       });
     });
 
-    return res.status(200).json({
-      success: true,
-      message: 'Unit berhasil dihapus',
-    });
+    return res.status(200).json({ success: true, message: 'Unit berhasil dihapus' });
   } catch (error) {
     console.error('deleteUnit error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Unit tidak bisa dihapus karena masih dipakai atau terjadi kesalahan',
-    });
+    return res.status(500).json({ success: false, message: 'Unit tidak bisa dihapus karena masih dipakai di produk' });
   }
 }
 
 /* =========================
-   PRODUCT
+   PRODUCT (ORIGINAL)
 ========================= */
 
 export async function createProduct(req: Request, res: Response) {
@@ -739,7 +481,6 @@ export async function createProduct(req: Request, res: Response) {
       const category = await prisma.category.findFirst({
         where: {
           id: categoryId,
-          merchantId,
         },
       });
 
@@ -755,7 +496,6 @@ export async function createProduct(req: Request, res: Response) {
       const unit = await prisma.unit.findFirst({
         where: {
           id: unitId,
-          merchantId,
         },
       });
 
@@ -1101,7 +841,6 @@ export async function updateProduct(req: Request, res: Response) {
       const category = await prisma.category.findFirst({
         where: {
           id: categoryId,
-          merchantId,
         },
       });
 
@@ -1117,7 +856,6 @@ export async function updateProduct(req: Request, res: Response) {
       const unit = await prisma.unit.findFirst({
         where: {
           id: unitId,
-          merchantId,
         },
       });
 

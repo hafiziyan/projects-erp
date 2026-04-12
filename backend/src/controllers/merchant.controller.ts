@@ -2,10 +2,17 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 
+// Schema dengan validasi angka saja dan batasan karakter
 const createMerchantSchema = z.object({
   name: z.string().min(3, 'Nama merchant minimal 3 karakter'),
   address: z.string().optional(),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .min(10, 'Nomor telepon minimal 10 angka')
+    .max(15, 'Nomor telepon maksimal 15 angka')
+    .regex(/^\d+$/, 'Nomor telepon hanya boleh berisi angka')
+    .optional()
+    .or(z.literal('')), // Memungkinkan string kosong jika tidak diisi
 });
 
 export async function createMerchant(req: Request, res: Response) {

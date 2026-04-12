@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { signToken } from '../utils/jwt';
 
@@ -25,6 +26,15 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
   password: z.string().min(6, 'Password minimal 6 karakter'),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Email tidak valid'),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Token tidak valid'),
+  newPassword: z.string().min(6, 'Password minimal 6 karakter'),
 });
 
 export async function registerOwner(req: Request, res: Response) {
@@ -249,5 +259,83 @@ export async function me(req: Request, res: Response) {
       success: false,
       message: 'Terjadi kesalahan server',
     });
+  }
+}
+
+export async function forgotPassword(req: Request, res: Response) {
+  try {
+    const parsed = forgotPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Validasi gagal' });
+    }
+
+    const { email } = parsed.data;
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      return res.status(200).json({ success: true, message: 'Jika email terdaftar, instruksi reset telah dikirim.' });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000); 
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { resetToken, resetTokenExpiry },
+    });
+
+    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+
+    console.log(`\n=== KIRIM EMAIL KE: ${email} ===`);
+    console.log(`Klik link ini untuk reset: ${resetLink}\n`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Jika email terdaftar, instruksi reset telah dikirim.',
+    });
+  } catch (error) {
+    console.error('forgotPassword error:', error);
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
+  }
+}
+
+export async function resetPassword(req: Request, res: Response) {
+  try {
+    const parsed = resetPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Validasi gagal' });
+    }
+
+    const { token, newPassword } = parsed.data;
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: { gt: new Date() },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Token tidak valid atau sudah kadaluarsa' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password berhasil diubah. Silakan login.',
+    });
+  } catch (error) {
+    console.error('resetPassword error:', error);
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }

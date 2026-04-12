@@ -1,6 +1,6 @@
 "use client";
 
-import React, { FormEvent, useEffect, useState } from "react";
+import React, { FormEvent, useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { getActiveMerchant } from "@/lib/auth";
 
@@ -28,6 +28,9 @@ type Product = {
 
 export default function ProductsPage() {
   const merchant = getActiveMerchant();
+
+  // Mencegah error Hydration (Tulisan merah dari React)
+  const [isMounted, setIsMounted] = useState(false);
 
   const [items, setItems] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -69,6 +72,7 @@ export default function ProductsPage() {
   }
 
   useEffect(() => {
+    setIsMounted(true);
     loadAll();
   }, []);
 
@@ -135,7 +139,7 @@ export default function ProductsPage() {
           Products
         </h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Merchant: {merchant?.merchantName || "-"}
+          Merchant: {isMounted ? (merchant?.merchantName || "-") : "-"}
         </p>
       </div>
 
@@ -274,7 +278,7 @@ export default function ProductsPage() {
                       {item.status === "active" && (
                         <button
                           onClick={() => handleDeactivate(item.id)}
-                          className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white"
+                          className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600"
                         >
                           Deactivate
                         </button>
@@ -291,6 +295,9 @@ export default function ProductsPage() {
   );
 }
 
+/* =====================================================================
+   KOMPONEN INPUT
+===================================================================== */
 function Input({
   label,
   value,
@@ -320,6 +327,9 @@ function Input({
   );
 }
 
+/* =====================================================================
+   KOMPONEN SELECT (SUDAH DIUBAH MENJADI SEARCHABLE)
+===================================================================== */
 function Select({
   label,
   value,
@@ -331,23 +341,104 @@ function Select({
   onChange: (value: string) => void;
   options: { label: string; value: string }[];
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Menutup dropdown jika user klik di luar area
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Filter opsi berdasarkan ketikan
+  const filteredOptions = options.filter((opt) =>
+    opt.label.toLowerCase().includes(query.toLowerCase())
+  );
+
+  // Mendapatkan label dari opsi yang dipilih
+  const selectedOption = options.find((opt) => opt.value === value);
+
   return (
-    <div>
+    <div ref={wrapperRef} className="w-full">
       <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
         {label}
       </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700"
-      >
-        <option value="">Select {label}</option>
-        {options.map((item) => (
-          <option key={item.value} value={item.value}>
-            {item.label}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <div
+          className="flex h-11 w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-transparent px-4 text-sm dark:border-gray-700 dark:text-white"
+          onClick={() => {
+            setIsOpen(!isOpen);
+            setQuery(""); // Reset pencarian setiap dropdown dibuka
+          }}
+        >
+          <span className={selectedOption ? "text-gray-900 dark:text-white" : "text-gray-400"}>
+            {selectedOption ? selectedOption.label : `Select ${label}`}
+          </span>
+          <svg
+            className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+
+        {isOpen && (
+          <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+            <div className="border-b border-gray-100 p-2 dark:border-gray-700">
+              <input
+                type="text"
+                autoFocus
+                className="h-9 w-full rounded-md border border-gray-300 bg-transparent px-3 text-sm outline-none focus:border-brand-500 dark:border-gray-600 dark:text-white"
+                placeholder="Cari..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onClick={(e) => e.stopPropagation()} // Supaya tidak tertutup saat diketik
+              />
+            </div>
+            <ul className="max-h-48 overflow-y-auto py-1">
+              {filteredOptions.length === 0 ? (
+                <li className="px-4 py-2 text-sm text-gray-500">Tidak ada hasil</li>
+              ) : (
+                <>
+                  <li
+                    className="cursor-pointer px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    onClick={() => {
+                      onChange("");
+                      setIsOpen(false);
+                    }}
+                  >
+                    -- Kosongkan Pilihan --
+                  </li>
+                  {filteredOptions.map((opt) => (
+                    <li
+                      key={opt.value}
+                      className={`cursor-pointer px-4 py-2 text-sm hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/20 dark:text-white ${
+                        value === opt.value
+                          ? "bg-brand-50 font-medium text-brand-600 dark:bg-brand-500/20"
+                          : ""
+                      }`}
+                      onClick={() => {
+                        onChange(opt.value);
+                        setIsOpen(false);
+                      }}
+                    >
+                      {opt.label}
+                    </li>
+                  ))}
+                </>
+              )}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

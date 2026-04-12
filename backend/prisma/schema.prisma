@@ -8,222 +8,209 @@ datasource db {
 }
 
 model User {
-  id               BigInt           @id @default(autoincrement())
-  name             String           @db.VarChar(100)
-  email            String           @unique @db.VarChar(100)
-  password         String           @db.VarChar(255)
-  status           UserStatus       @default(active)
-  createdAt        DateTime         @default(now()) @map("created_at")
-  updatedAt        DateTime         @updatedAt @map("updated_at")
-
-  merchantUsers    MerchantUser[]
-  cashierSales     Sale[]           @relation("CashierSales")
-  purchaseRecords  Purchase[]
+  id               BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  name             String         @db.VarChar(100)
+  email            String         @unique(map: "email") @db.VarChar(100)
+  password         String         @db.VarChar(255)
+  status           UserStatus     @default(active)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  resetToken       String?         @db.VarChar(255)
+  resetTokenExpiry DateTime?       @db.Timestamp(0)
   auditLogs        AuditLog[]
+  merchantUsers    MerchantUser[]
+  purchaseRecords  Purchase[]
+  cashierSales     Sale[]         @relation("CashierSales")
 
   @@map("users")
 }
 
 model Merchant {
-  id            BigInt           @id @default(autoincrement())
-  name          String           @db.VarChar(100)
-  address       String?          @db.VarChar(255)
-  phone         String?          @db.VarChar(50)
-  status        MerchantStatus   @default(active)
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
-
-  merchantUsers MerchantUser[]
-  categories    Category[]
-  units         Unit[]
-  products      Product[]
-  stocks        Stock[]
-  sales         Sale[]
-  purchases     Purchase[]
+  id            BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  name          String         @db.VarChar(100)
+  address       String?        @db.VarChar(255)
+  phone         String?        @db.VarChar(50)
+  status        MerchantStatus @default(active)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
   auditLogs     AuditLog[]
+  categories    Category[]
+  merchantUsers MerchantUser[]
+  products      Product[]
+  purchases     Purchase[]
+  sales         Sale[]
+  stocks        Stock[]
+  units         Unit[]
 
   @@map("merchants")
 }
 
 model Role {
-  id            BigInt           @id @default(autoincrement())
-  name          String           @unique @db.VarChar(50)
-  description   String?          @db.Text
-
+  id            BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  name          String         @unique(map: "name") @db.VarChar(50)
+  description   String?        @db.Text
   merchantUsers MerchantUser[]
 
   @@map("roles")
 }
 
 model MerchantUser {
-  id          BigInt           @id @default(autoincrement())
-  merchantId  BigInt           @map("merchant_id")
-  userId      BigInt           @map("user_id")
-  roleId      BigInt           @map("role_id")
-  status      MembershipStatus @default(active)
-  createdAt   DateTime         @default(now()) @map("created_at")
+  id         BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId BigInt           @map("merchant_id") @db.UnsignedBigInt
+  userId     BigInt           @map("user_id") @db.UnsignedBigInt
+  roleId     BigInt           @map("role_id") @db.UnsignedBigInt
+  status     MembershipStatus @default(active)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamp(0)
+  merchant   Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_merchant_users_merchant")
+  role       Role             @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_merchant_users_role")
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_merchant_users_user")
 
-  merchant    Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role        Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@unique([merchantId, userId])
-  @@index([userId])
-  @@index([merchantId])
+  @@unique([merchantId, userId], map: "unique_merchant_user")
+  @@index([roleId], map: "fk_merchant_users_role")
+  @@index([userId], map: "fk_merchant_users_user")
   @@map("merchant_users")
 }
 
 model Category {
-  id          BigInt    @id @default(autoincrement())
-  merchantId  BigInt    @map("merchant_id")
-  name        String    @db.VarChar(100)
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId BigInt    @map("merchant_id") @db.UnsignedBigInt
+  name       String    @db.VarChar(100)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  merchant   Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_categories_merchant")
+  products   Product[]
 
-  merchant    Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  products    Product[]
-
-  @@unique([merchantId, name])
-  @@index([merchantId])
+  @@unique([merchantId, name], map: "unique_category_name_per_merchant")
   @@map("categories")
 }
 
 model Unit {
-  id          BigInt    @id @default(autoincrement())
-  merchantId  BigInt    @map("merchant_id")
-  name        String    @db.VarChar(50)
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId BigInt    @map("merchant_id") @db.UnsignedBigInt
+  name       String    @db.VarChar(50)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  products   Product[]
+  merchant   Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_units_merchant")
 
-  merchant    Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  products    Product[]
-
-  @@unique([merchantId, name])
-  @@index([merchantId])
+  @@unique([merchantId, name], map: "unique_unit_name_per_merchant")
   @@map("units")
 }
 
 model Product {
-  id            BigInt         @id @default(autoincrement())
-  merchantId    BigInt         @map("merchant_id")
-  categoryId    BigInt?        @map("category_id")
-  unitId        BigInt?        @map("unit_id")
+  id            BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId    BigInt         @map("merchant_id") @db.UnsignedBigInt
+  categoryId    BigInt?        @map("category_id") @db.UnsignedBigInt
+  unitId        BigInt?        @map("unit_id") @db.UnsignedBigInt
   name          String         @db.VarChar(150)
   sku           String?        @db.VarChar(100)
   price         Decimal        @db.Decimal(15, 2)
-  status        ProductStatus  @default(active)
   reorderPoint  Int            @default(5) @map("reorder_point")
-  createdAt     DateTime       @default(now()) @map("created_at")
-
-  merchant      Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  category      Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  stock         Stock?
-  saleItems     SaleItem[]
+  status        ProductStatus  @default(active)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamp(0)
+  category      Category?      @relation(fields: [categoryId], references: [id], onUpdate: NoAction, map: "fk_products_category")
+  merchant      Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_products_merchant")
+  unit          Unit?          @relation(fields: [unitId], references: [id], onUpdate: NoAction, map: "fk_products_unit")
   purchaseItems PurchaseItem[]
+  saleItems     SaleItem[]
+  stock         Stock?
 
-  @@unique([merchantId, sku])
-  @@index([merchantId])
-  @@index([categoryId])
-  @@index([unitId])
+  @@unique([merchantId, sku], map: "unique_product_sku_per_merchant")
+  @@index([categoryId], map: "fk_products_category")
+  @@index([unitId], map: "fk_products_unit")
   @@map("products")
 }
 
 model Stock {
-  id          BigInt    @id @default(autoincrement())
-  merchantId  BigInt    @map("merchant_id")
-  productId   BigInt    @unique @map("product_id")
-  quantity    Int       @default(0)
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId BigInt   @map("merchant_id") @db.UnsignedBigInt
+  productId  BigInt   @unique(map: "product_id") @map("product_id") @db.UnsignedBigInt
+  quantity   Int      @default(0)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_stocks_merchant")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_stocks_product")
 
-  merchant    Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@index([merchantId])
+  @@index([merchantId], map: "fk_stocks_merchant")
   @@map("stocks")
 }
 
 model Sale {
-  id             BigInt    @id @default(autoincrement())
-  merchantId     BigInt    @map("merchant_id")
-  cashierUserId  BigInt?   @map("cashier_user_id")
-  invoiceNumber  String    @db.VarChar(100) @map("invoice_number")
-  subtotal       Decimal   @db.Decimal(15, 2)
-  discountAmount Decimal   @default(0) @db.Decimal(15, 2) @map("discount_amount")
-  totalAmount    Decimal   @db.Decimal(15, 2) @map("total_amount")
-  paymentMethod  String?   @db.VarChar(50) @map("payment_method")
-  createdAt      DateTime  @default(now()) @map("created_at")
-
-  merchant       Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  cashier        User?     @relation("CashierSales", fields: [cashierUserId], references: [id], onDelete: SetNull)
+  id             BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId     BigInt     @map("merchant_id") @db.UnsignedBigInt
+  cashierUserId  BigInt     @map("cashier_user_id") @db.UnsignedBigInt
+  invoiceNumber  String     @map("invoice_number") @db.VarChar(100)
+  subtotal       Decimal    @db.Decimal(15, 2)
+  discountAmount Decimal    @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
+  totalAmount    Decimal    @map("total_amount") @db.Decimal(15, 2)
+  paymentMethod  String     @map("payment_method") @db.VarChar(50)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  cashier        User       @relation("CashierSales", fields: [cashierUserId], references: [id], onUpdate: NoAction, map: "fk_sales_cashier")
+  merchant       Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sales_merchant")
   items          SaleItem[]
 
-  @@unique([merchantId, invoiceNumber])
-  @@index([merchantId])
+  @@unique([merchantId, invoiceNumber], map: "unique_sale_invoice_per_merchant")
+  @@index([cashierUserId], map: "fk_sales_cashier")
   @@map("sales")
 }
 
 model SaleItem {
-  id         BigInt    @id @default(autoincrement())
-  saleId     BigInt    @map("sale_id")
-  productId  BigInt    @map("product_id")
-  quantity   Int
-  price      Decimal   @db.Decimal(15, 2)
-  subtotal   Decimal   @db.Decimal(15, 2)
+  id        BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
+  saleId    BigInt  @map("sale_id") @db.UnsignedBigInt
+  productId BigInt  @map("product_id") @db.UnsignedBigInt
+  quantity  Int
+  price     Decimal @db.Decimal(15, 2)
+  subtotal  Decimal @db.Decimal(15, 2)
+  product   Product @relation(fields: [productId], references: [id], onUpdate: NoAction, map: "fk_sales_items_product")
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sales_items_sale")
 
-  sale       Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@index([saleId])
-  @@index([productId])
+  @@index([productId], map: "fk_sales_items_product")
+  @@index([saleId], map: "fk_sales_items_sale")
   @@map("sales_items")
 }
 
 model Purchase {
-  id            BigInt    @id @default(autoincrement())
-  merchantId    BigInt    @map("merchant_id")
-  userId        BigInt?   @map("user_id")
-  invoiceNumber String?   @db.VarChar(100) @map("invoice_number")
-  totalAmount   Decimal   @db.Decimal(15, 2) @map("total_amount")
-  createdAt     DateTime  @default(now()) @map("created_at")
-
-  merchant      Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id            BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId    BigInt         @map("merchant_id") @db.UnsignedBigInt
+  userId        BigInt         @map("user_id") @db.UnsignedBigInt
+  invoiceNumber String?        @map("invoice_number") @db.VarChar(100)
+  totalAmount   Decimal        @map("total_amount") @db.Decimal(15, 2)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamp(0)
   items         PurchaseItem[]
+  merchant      Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_purchases_merchant")
+  user          User           @relation(fields: [userId], references: [id], onUpdate: NoAction, map: "fk_purchases_user")
 
-  @@index([merchantId])
+  @@index([merchantId], map: "fk_purchases_merchant")
+  @@index([userId], map: "fk_purchases_user")
   @@map("purchases")
 }
 
 model PurchaseItem {
-  id          BigInt    @id @default(autoincrement())
-  purchaseId  BigInt    @map("purchase_id")
-  productId   BigInt    @map("product_id")
-  quantity    Int
-  cost        Decimal   @db.Decimal(15, 2)
-  subtotal    Decimal   @db.Decimal(15, 2)
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  purchaseId BigInt   @map("purchase_id") @db.UnsignedBigInt
+  productId  BigInt   @map("product_id") @db.UnsignedBigInt
+  quantity   Int
+  cost       Decimal  @db.Decimal(15, 2)
+  subtotal   Decimal  @db.Decimal(15, 2)
+  product    Product  @relation(fields: [productId], references: [id], onUpdate: NoAction, map: "fk_purchase_items_product")
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_purchase_items_purchase")
 
-  purchase    Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@index([purchaseId])
-  @@index([productId])
+  @@index([productId], map: "fk_purchase_items_product")
+  @@index([purchaseId], map: "fk_purchase_items_purchase")
   @@map("purchase_items")
 }
 
 model AuditLog {
-  id          BigInt    @id @default(autoincrement())
-  merchantId  BigInt    @map("merchant_id")
-  userId      BigInt?   @map("user_id")
-  action      String    @db.VarChar(100)
-  entity      String?   @db.VarChar(100)
-  entityId    BigInt?   @map("entity_id")
-  description String?   @db.Text
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId  BigInt   @map("merchant_id") @db.UnsignedBigInt
+  userId      BigInt   @map("user_id") @db.UnsignedBigInt
+  action      String   @db.VarChar(100)
+  entity      String?  @db.VarChar(100)
+  entityId    BigInt?  @map("entity_id") @db.UnsignedBigInt
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  merchant    Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_audit_logs_merchant")
+  user        User     @relation(fields: [userId], references: [id], onUpdate: NoAction, map: "fk_audit_logs_user")
 
-  merchant    Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  @@index([merchantId])
-  @@index([userId])
+  @@index([merchantId], map: "fk_audit_logs_merchant")
+  @@index([userId], map: "fk_audit_logs_user")
   @@map("audit_logs")
 }
 

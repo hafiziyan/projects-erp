@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import React, { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation"; // Tambahkan useSearchParams
+import React, { FormEvent, useState, useMemo } from "react";
 import { api } from "@/lib/api";
 import { saveActiveMerchant } from "@/lib/auth";
 
@@ -27,6 +27,10 @@ type CreateMerchantResponse = {
 
 export default function CreateMerchantPage() {
   const router = useRouter();
+  const searchParams = useSearchParams(); // Hook untuk membaca query parameter
+  
+  // Ambil nilai parameter 'from'
+  const fromSource = searchParams.get("from");
 
   const [form, setForm] = useState({
     name: "",
@@ -36,6 +40,14 @@ export default function CreateMerchantPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Tentukan tujuan tombol Back berdasarkan parameter
+  const backConfig = useMemo(() => {
+    if (fromSource === "onboarding") {
+      return { label: "Back to sign in", href: "/signin" };
+    }
+    return { label: "Back to dashboard", href: "/admin/dashboard" };
+  }, [fromSource]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -69,11 +81,12 @@ export default function CreateMerchantPage() {
     <div className="flex min-h-screen items-center justify-center bg-white px-4 py-10 dark:bg-gray-900">
       <div className="w-full max-w-md">
         <div className="mb-5">
+          {/* Tombol Back Dinamis */}
           <Link
-            href="/signin"
+            href={backConfig.href}
             className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
           >
-            ← Back to sign in
+            ← {backConfig.label}
           </Link>
         </div>
 
@@ -99,7 +112,7 @@ export default function CreateMerchantPage() {
                   setForm((prev) => ({ ...prev, name: e.target.value }))
                 }
                 placeholder="Contoh: Toko Hafizhan"
-                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:text-white"
               />
             </div>
 
@@ -114,7 +127,7 @@ export default function CreateMerchantPage() {
                   setForm((prev) => ({ ...prev, address: e.target.value }))
                 }
                 placeholder="Contoh: Pekanbaru"
-                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:text-white"
               />
             </div>
 
@@ -129,7 +142,7 @@ export default function CreateMerchantPage() {
                   setForm((prev) => ({ ...prev, phone: e.target.value }))
                 }
                 placeholder="08123456789"
-                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:text-white"
               />
             </div>
 
