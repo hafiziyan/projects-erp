@@ -48,6 +48,11 @@ export default function SignInPage() {
 
       setSuccess(result.message || "Login berhasil");
 
+      // Simpan merchant pertama jika ada
+      if (result.data.merchants && result.data.merchants.length > 0) {
+        saveActiveMerchant(result.data.merchants[0]);
+      }
+
       router.push("/admin/dashboard");
     } catch (err: any) {
       setError(err.message || "Login gagal");

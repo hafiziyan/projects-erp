@@ -152,7 +152,18 @@ export default function DashboardPage() {
 
         setDashboard(dashboardResult.data);
       } catch (err: any) {
-        setError(err.message || "Gagal memuat dashboard");
+        const msg = err.message || "";
+        console.error("Dashboard init error:", msg);
+        
+        if (msg.includes("Unauthorized") || msg.includes("401")) {
+          // Jika unauthorized, bersihkan storage dan balik ke login
+          localStorage.removeItem("merchantId");
+          localStorage.removeItem("merchantName");
+          localStorage.removeItem("merchantRole");
+          window.location.href = "/signin";
+        } else {
+          setError(msg || "Gagal memuat dashboard");
+        }
       } finally {
         setLoading(false);
       }

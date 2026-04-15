@@ -8,7 +8,7 @@ const router = Router();
 router.get(
   '/summary',
   authMiddleware,
-  requireRole(['Owner']),
+  requireRole(['Owner', 'Kasir', 'Gudang']),
   getDashboardSummary
 );
 

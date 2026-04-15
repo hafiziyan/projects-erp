@@ -19,7 +19,8 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     };
 
     next();
-  } catch {
+  } catch (error) {
+    console.error('AuthMiddleware: Token verification failed:', error);
     return res.status(401).json({
       success: false,
       message: 'Token tidak valid atau expired',

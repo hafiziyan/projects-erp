@@ -157,6 +157,7 @@ export async function getCategories(req: Request, res: Response) {
     }
 
     const categories = await prisma.category.findMany({
+      where: { merchantId },
       orderBy: { name: 'asc' },
     });
 
@@ -313,6 +314,7 @@ export async function getUnits(req: Request, res: Response) {
     if (!merchantId) return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
 
     const units = await prisma.unit.findMany({
+      where: { merchantId },
       orderBy: { name: 'asc' },
     });
 

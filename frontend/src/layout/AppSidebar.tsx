@@ -6,6 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "@/context/SidebarContext";
 import { useMerchantModal } from "@/context/MerchantModalContext";
+import { getActiveMerchant } from "@/lib/auth";
 import {
   BoxCubeIcon,
   ChevronDownIcon,
@@ -21,7 +22,8 @@ type NavItem = {
   name: string;
   icon: React.ReactNode;
   path?: string;
-  subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
+  roles?: string[]; // Mendefinisikan role apa saja yang bisa melihat menu ini
+  subItems?: { name: string; path: string; pro?: boolean; new?: boolean; roles?: string[] }[];
 };
 
 const navItems: NavItem[] = [
@@ -29,29 +31,33 @@ const navItems: NavItem[] = [
     icon: <GridIcon />,
     name: "Dashboard",
     path: "/admin/dashboard",
+    roles: ["Owner", "Kasir", "Gudang"],
   },
   {
     icon: <BoxCubeIcon />,
     name: "Master Data",
+    roles: ["Owner", "Gudang"],
     subItems: [
-      { name: "Categories", path: "/admin/categories" },
-      { name: "Units", path: "/admin/units" },
-      { name: "Products", path: "/admin/products" },
-      { name: "Stocks", path: "/admin/stocks" },
+      { name: "Categories", path: "/admin/categories", roles: ["Owner", "Gudang"] },
+      { name: "Units", path: "/admin/units", roles: ["Owner", "Gudang"] },
+      { name: "Products", path: "/admin/products", roles: ["Owner", "Gudang"] },
+      { name: "Stocks", path: "/admin/stocks", roles: ["Owner", "Gudang"] },
     ],
   },
   {
     icon: <TableIcon />,
     name: "Transactions",
+    roles: ["Owner", "Kasir", "Gudang"],
     subItems: [
-      { name: "Sales", path: "/admin/sales" },
-      { name: "Purchases", path: "/admin/purchases" },
+      { name: "Sales", path: "/admin/sales", roles: ["Owner", "Kasir"] },
+      { name: "Purchases", path: "/admin/purchases", roles: ["Owner", "Gudang"] },
     ],
   },
   {
     icon: <UserCircleIcon />,
     name: "Users & Roles",
     path: "/admin/users",
+    roles: ["Owner"],
   },
 ];
 
@@ -59,11 +65,11 @@ const othersItems: NavItem[] = [
   {
     icon: <ListIcon />,
     name: "Merchant",
+    roles: ["Owner", "Kasir", "Gudang"],
     subItems: [
-      { name: "Manage Branches", path: "/admin/merchants" },
-      { name: "Create Merchant", path: "/create-merchant" },
-      // MODIFIKASI: Tambahkan ?from=dashboard di sini
-      { name: "Switch Shop", path: "/select-merchant?from=dashboard" },
+      { name: "Manage Branches", path: "/admin/merchants", roles: ["Owner"] },
+      { name: "Create Merchant", path: "/create-merchant", roles: ["Owner"] },
+      { name: "Switch Shop", path: "/select-merchant?from=dashboard", roles: ["Owner", "Kasir", "Gudang"] },
     ],
   },
   {
@@ -79,6 +85,12 @@ const othersItems: NavItem[] = [
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const active = getActiveMerchant();
+    setUserRole(active?.role || null);
+  }, []);
 
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: "main" | "others";
@@ -98,11 +110,17 @@ const AppSidebar: React.FC = () => {
   }, [pathname]);
 
   const isParentActive = useCallback(
-    (subItems?: { name: string; path: string }[]) => {
+    (subItems?: { name: string; path: string; roles?: string[] }[]) => {
       if (!subItems) return false;
-      return subItems.some((item) => pathname === item.path.split('?')[0]);
+      return subItems.some((item) => {
+        // Cek apakah item aktif berdasarkan path
+        const pathMatch = pathname === item.path.split('?')[0];
+        // Cek apakah user punya akses ke subitem ini
+        const roleMatch = !item.roles || (userRole && item.roles.includes(userRole));
+        return pathMatch && roleMatch;
+      });
     },
-    [pathname]
+    [pathname, userRole]
   );
 
   const handleSubmenuToggle = (index: number, menuType: "main" | "others") => {
@@ -125,135 +143,189 @@ const AppSidebar: React.FC = () => {
     const { openCreateMerchant, openSelectMerchant } = useMerchantModal();
 
     return (
-      <ul className="flex flex-col gap-4">
-        {items.map((nav, index) => {
-          const submenuActive = isParentActive(nav.subItems);
-          const isSubmenuOpen =
-            openSubmenu?.type === menuType && openSubmenu?.index === index;
+      <div className="flex flex-col h-full justify-between pb-8">
+        <ul className="flex flex-col gap-4">
+          {items
+            .filter((nav) => !nav.roles || (userRole && nav.roles.includes(userRole)))
+            .map((nav, index) => {
+              const filteredSubItems = nav.subItems?.filter(
+                (si) => !si.roles || (userRole && si.roles.includes(userRole))
+              );
 
-          return (
-            <li key={nav.name}>
-              {nav.subItems ? (
-                <button
-                  onClick={() => handleSubmenuToggle(index, menuType)}
-                  className={`menu-item group cursor-pointer ${
-                    submenuActive || isSubmenuOpen
-                      ? "menu-item-active"
-                      : "menu-item-inactive"
-                  } ${
-                    !isExpanded && !isHovered
-                      ? "lg:justify-center"
-                      : "lg:justify-start"
-                  }`}
-                >
-                  <span
-                    className={`${
-                      submenuActive || isSubmenuOpen
-                        ? "menu-item-icon-active"
-                        : "menu-item-icon-inactive"
-                    }`}
-                  >
-                    {nav.icon}
-                  </span>
+              // Jika nav memiliki subItems tapi semuanya terfilter (tidak ada akses), jangan tampilkan menu induk
+              if (nav.subItems && (!filteredSubItems || filteredSubItems.length === 0)) {
+                return null;
+              }
 
-                  {(isExpanded || isHovered || isMobileOpen) && (
-                    <span className="menu-item-text">{nav.name}</span>
-                  )}
+              const submenuActive = isParentActive(nav.subItems);
+              const isSubmenuOpen =
+                openSubmenu?.type === menuType && openSubmenu?.index === index;
 
-                  {(isExpanded || isHovered || isMobileOpen) && (
-                    <span
-                      className={`ml-auto flex h-5 w-5 items-center justify-center transition-transform duration-200 ${
-                        isSubmenuOpen ? "rotate-180 text-brand-500" : ""
+              return (
+                <li key={nav.name}>
+                  {nav.subItems ? (
+                    <button
+                      onClick={() => handleSubmenuToggle(index, menuType)}
+                      className={`menu-item group cursor-pointer ${
+                        submenuActive || isSubmenuOpen
+                          ? "menu-item-active"
+                          : "menu-item-inactive"
+                      } ${
+                        !isExpanded && !isHovered
+                          ? "lg:justify-center"
+                          : "lg:justify-start"
                       }`}
                     >
-                      <ChevronDownIcon />
-                    </span>
+                      <span
+                        className={`${
+                          submenuActive || isSubmenuOpen
+                            ? "menu-item-icon-active"
+                            : "menu-item-icon-inactive"
+                        }`}
+                      >
+                        {nav.icon}
+                      </span>
+
+                      {(isExpanded || isHovered || isMobileOpen) && (
+                        <span className="menu-item-text">{nav.name}</span>
+                      )}
+
+                      {(isExpanded || isHovered || isMobileOpen) && (
+                        <span
+                          className={`ml-auto flex h-5 w-5 items-center justify-center transition-transform duration-200 ${
+                            isSubmenuOpen ? "rotate-180 text-brand-500" : ""
+                          }`}
+                        >
+                          <ChevronDownIcon />
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    nav.path && (
+                      <Link
+                        href={nav.path}
+                        className={`menu-item group ${
+                          isActive(nav.path)
+                            ? "menu-item-active"
+                            : "menu-item-inactive"
+                        }`}
+                      >
+                        <span
+                          className={`${
+                            isActive(nav.path)
+                              ? "menu-item-icon-active"
+                              : "menu-item-icon-inactive"
+                          }`}
+                        >
+                          {nav.icon}
+                        </span>
+
+                        {(isExpanded || isHovered || isMobileOpen) && (
+                          <span className="menu-item-text">{nav.name}</span>
+                        )}
+                      </Link>
+                    )
                   )}
-                </button>
-              ) : (
-                nav.path && (
-                  <Link
-                    href={nav.path}
-                    className={`menu-item group ${
-                      isActive(nav.path)
-                        ? "menu-item-active"
-                        : "menu-item-inactive"
-                    }`}
-                  >
-                    <span
-                      className={`${
-                        isActive(nav.path)
-                          ? "menu-item-icon-active"
-                          : "menu-item-icon-inactive"
-                      }`}
+
+                  {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
+                    <div
+                      ref={(el) => {
+                        subMenuRefs.current[`${menuType}-${index}`] = el;
+                      }}
+                      className="overflow-hidden transition-all duration-300"
+                      style={{
+                        height: isSubmenuOpen
+                          ? `${subMenuHeight[`${menuType}-${index}`] || 0}px`
+                          : "0px",
+                      }}
                     >
-                      {nav.icon}
-                    </span>
+                      <ul className="ml-9 mt-2 space-y-1">
+                        {filteredSubItems?.map((subItem) => {
+                          // Handle Special Modal Triggers
+                          const isCreateMerchant = subItem.path === "/create-merchant";
+                          const isSelectMerchant = subItem.path.startsWith("/select-merchant");
 
-                    {(isExpanded || isHovered || isMobileOpen) && (
-                      <span className="menu-item-text">{nav.name}</span>
-                    )}
-                  </Link>
-                )
-              )}
+                          if (isCreateMerchant || isSelectMerchant) {
+                            return (
+                              <li key={subItem.name}>
+                                <button
+                                  onClick={isCreateMerchant ? openCreateMerchant : openSelectMerchant}
+                                  className={`menu-dropdown-item w-full text-left cursor-pointer ${
+                                    isActive(subItem.path)
+                                      ? "menu-dropdown-item-active"
+                                      : "menu-dropdown-item-inactive"
+                                  }`}
+                                >
+                                  {subItem.name}
+                                </button>
+                              </li>
+                            );
+                          }
 
-              {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
-                <div
-                  ref={(el) => {
-                    subMenuRefs.current[`${menuType}-${index}`] = el;
-                  }}
-                  className="overflow-hidden transition-all duration-300"
-                  style={{
-                    height: isSubmenuOpen
-                      ? `${subMenuHeight[`${menuType}-${index}`] || 0}px`
-                      : "0px",
-                  }}
-                >
-                  <ul className="ml-9 mt-2 space-y-1">
-                    {nav.subItems.map((subItem) => {
-                      // Handle Special Modal Triggers
-                      const isCreateMerchant = subItem.path === "/create-merchant";
-                      const isSelectMerchant = subItem.path.startsWith("/select-merchant");
+                          return (
+                            <li key={subItem.name}>
+                              <Link
+                                href={subItem.path}
+                                className={`menu-dropdown-item ${
+                                  isActive(subItem.path)
+                                    ? "menu-dropdown-item-active"
+                                    : "menu-dropdown-item-inactive"
+                                }}`}
+                              >
+                                {subItem.name}
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+        </ul>
 
-                      if (isCreateMerchant || isSelectMerchant) {
-                        return (
-                          <li key={subItem.name}>
-                            <button
-                              onClick={isCreateMerchant ? openCreateMerchant : openSelectMerchant}
-                              className={`menu-dropdown-item w-full text-left cursor-pointer ${
-                                isActive(subItem.path)
-                                  ? "menu-dropdown-item-active"
-                                  : "menu-dropdown-item-inactive"
-                              }`}
-                            >
-                              {subItem.name}
-                            </button>
-                          </li>
-                        );
-                      }
-
-                      return (
-                        <li key={subItem.name}>
-                          <Link
-                            href={subItem.path}
-                            className={`menu-dropdown-item ${
-                              isActive(subItem.path)
-                                ? "menu-dropdown-item-active"
-                                : "menu-dropdown-item-inactive"
-                            }`}
-                          >
-                            {subItem.name}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+        {menuType === "others" && (
+          <button
+            onClick={async () => {
+              try {
+                // Hapus data lokal
+                localStorage.removeItem("merchantId");
+                localStorage.removeItem("merchantName");
+                localStorage.removeItem("merchantRole");
+                // Logout dari server
+                await api.post("/auth/logout");
+                window.location.href = "/signin";
+              } catch (err) {
+                window.location.href = "/signin";
+              }
+            }}
+            className={`menu-item group mt-4 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 ${
+              !isExpanded && !isHovered ? "lg:justify-center" : "lg:justify-start"
+            }`}
+          >
+            <span className="menu-item-icon-inactive text-red-500">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+                className="w-5 h-5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
+                />
+              </svg>
+            </span>
+            {(isExpanded || isHovered || isMobileOpen) && (
+              <span className="menu-item-text font-bold">Logout</span>
+            )}
+          </button>
+        )}
+      </div>
     );
   };
 
