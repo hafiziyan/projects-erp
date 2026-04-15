@@ -129,6 +129,36 @@ export default function SignInPage() {
           <p className="mt-5 text-center text-sm text-gray-700 dark:text-gray-400">
             Don't have an account? <Link href="/signup" className="text-brand-500 font-medium">Sign Up</Link>
           </p>
+
+          {/* Quick Login Section - Development Only */}
+          <div className="mt-8 border-t border-gray-100 pt-6 dark:border-gray-800">
+            <p className="mb-4 text-center text-xs font-medium uppercase tracking-wider text-gray-400">
+              Quick Login (Dev Only)
+            </p>
+            <div className="grid grid-cols-1 gap-3">
+              {[
+                { label: "Owner (owner@pos.com)", email: "owner@pos.com" },
+                { label: "Kasir (kasir@pos.com)", email: "kasir@pos.com" },
+                { label: "Gudang (gudang@pos.com)", email: "gudang@pos.com" },
+              ].map((user) => (
+                <button
+                  key={user.email}
+                  type="button"
+                  onClick={() => {
+                    setForm({ email: user.email, password: "Password123" });
+                    // Give a tiny timeout to ensure state is updated before submitting
+                    setTimeout(() => {
+                      const loginBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+                      loginBtn?.click();
+                    }, 100);
+                  }}
+                  className="flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:bg-white/5 dark:text-gray-400 dark:hover:bg-white/10 transition"
+                >
+                  Login as {user.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

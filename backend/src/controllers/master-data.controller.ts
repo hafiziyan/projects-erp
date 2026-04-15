@@ -547,7 +547,7 @@ export async function createProduct(req: Request, res: Response) {
         data: {
           merchantId,
           productId: product.id,
-          quantity: initialStock,
+          actualQuantity: initialStock,
         },
       });
 
@@ -578,7 +578,7 @@ export async function createProduct(req: Request, res: Response) {
         price: Number(result.product.price),
         reorderPoint: result.product.reorderPoint,
         status: result.product.status,
-        stock: result.stock.quantity,
+        stock: result.stock.actualQuantity,
         category: result.product.category
           ? {
               id: result.product.category.id.toString(),
@@ -665,7 +665,7 @@ export async function getProducts(req: Request, res: Response) {
         price: Number(item.price),
         reorderPoint: item.reorderPoint,
         status: item.status,
-        stock: item.stock?.quantity ?? 0,
+        stock: item.stock?.actualQuantity ?? 0,
         category: item.category
           ? {
               id: item.category.id.toString(),
@@ -731,7 +731,7 @@ export async function getProductDetail(req: Request, res: Response) {
         price: Number(product.price),
         reorderPoint: product.reorderPoint,
         status: product.status,
-        stock: product.stock?.quantity ?? 0,
+        stock: product.stock?.actualQuantity ?? 0,
         category: product.category
           ? {
               id: product.category.id.toString(),
@@ -931,7 +931,7 @@ export async function updateProduct(req: Request, res: Response) {
         price: Number(updated.price),
         reorderPoint: updated.reorderPoint,
         status: updated.status,
-        stock: updated.stock?.quantity ?? 0,
+        stock: updated.stock?.actualQuantity ?? 0,
         category: updated.category
           ? {
               id: updated.category.id.toString(),
@@ -1026,6 +1026,84 @@ export async function deactivateProduct(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('deactivateProduct error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Terjadi kesalahan server',
+    });
+  }
+}
+
+export async function activateProduct(req: Request, res: Response) {
+  try {
+    const authUser = req.authUser;
+    const merchantId = getMerchantIdFromHeader(req);
+    const productIdRaw = getSingleParam(req.params.id);
+
+    if (!authUser) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
+    if (!merchantId || !productIdRaw || !/^\d+$/.test(productIdRaw)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Data request tidak valid',
+      });
+    }
+
+    const userId = BigInt(authUser.userId);
+    const productId = BigInt(productIdRaw);
+
+    const product = await prisma.product.findFirst({
+      where: {
+        id: productId,
+        merchantId,
+      },
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Produk tidak ditemukan',
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.product.update({
+        where: {
+          id: productId,
+        },
+        data: {
+          status: 'active',
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          merchantId,
+          userId,
+          action: 'ACTIVATE_PRODUCT',
+          entity: 'Product',
+          entityId: result.id,
+          description: `Produk ${result.name} diaktifkan kembali`,
+        },
+      });
+
+      return result;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Produk berhasil diaktifkan',
+      data: {
+        id: updated.id.toString(),
+        status: updated.status,
+      },
+    });
+  } catch (error) {
+    console.error('activateProduct error:', error);
     return res.status(500).json({
       success: false,
       message: 'Terjadi kesalahan server',

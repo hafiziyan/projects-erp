@@ -15,12 +15,15 @@ model User {
   status           UserStatus     @default(active)
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamp(0)
   updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
-  resetToken       String?         @db.VarChar(255)
-  resetTokenExpiry DateTime?       @db.Timestamp(0)
-  auditLogs        AuditLog[]
-  merchantUsers    MerchantUser[]
-  purchaseRecords  Purchase[]
-  cashierSales     Sale[]         @relation("CashierSales")
+  resetToken       String?        @db.VarChar(255)
+  resetTokenExpiry DateTime?      @db.Timestamp(0)
+  auditLogs          AuditLog[]
+  merchantUsers      MerchantUser[]
+  purchaseRecords    Purchase[]
+  cashierSales       Sale[]            @relation("CashierSales")
+  stockMutations     StockMutation[]
+  requestedTransfers TransferRequest[] @relation("RequestedTransfers")
+  approvedTransfers  TransferRequest[] @relation("ApprovedTransfers")
 
   @@map("users")
 }
@@ -33,14 +36,17 @@ model Merchant {
   status        MerchantStatus @default(active)
   createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamp(0)
   updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
-  auditLogs     AuditLog[]
-  categories    Category[]
-  merchantUsers MerchantUser[]
-  products      Product[]
-  purchases     Purchase[]
-  sales         Sale[]
-  stocks        Stock[]
-  units         Unit[]
+  auditLogs      AuditLog[]
+  categories     Category[]
+  merchantUsers  MerchantUser[]
+  products       Product[]
+  purchases      Purchase[]
+  sales          Sale[]
+  stocks         Stock[]
+  units          Unit[]
+  stockMutations StockMutation[]
+  transfersFrom  TransferRequest[] @relation("TransferFrom")
+  transfersTo    TransferRequest[] @relation("TransferTo")
 
   @@map("merchants")
 }
@@ -109,9 +115,11 @@ model Product {
   category      Category?      @relation(fields: [categoryId], references: [id], onUpdate: NoAction, map: "fk_products_category")
   merchant      Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_products_merchant")
   unit          Unit?          @relation(fields: [unitId], references: [id], onUpdate: NoAction, map: "fk_products_unit")
-  purchaseItems PurchaseItem[]
-  saleItems     SaleItem[]
-  stock         Stock?
+  purchaseItems  PurchaseItem[]
+  saleItems      SaleItem[]
+  stock          Stock?
+  stockMutations StockMutation[]
+  transferItems  TransferItem[]
 
   @@unique([merchantId, sku], map: "unique_product_sku_per_merchant")
   @@index([categoryId], map: "fk_products_category")
@@ -120,10 +128,11 @@ model Product {
 }
 
 model Stock {
-  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  merchantId BigInt   @map("merchant_id") @db.UnsignedBigInt
-  productId  BigInt   @unique(map: "product_id") @map("product_id") @db.UnsignedBigInt
-  quantity   Int      @default(0)
+  id               BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId       BigInt   @map("merchant_id") @db.UnsignedBigInt
+  productId        BigInt   @unique(map: "product_id") @map("product_id") @db.UnsignedBigInt
+  actualQuantity   Int      @default(0) @map("actual_quantity")
+  reservedQuantity Int      @default(0) @map("reserved_quantity")
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
   merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_stocks_merchant")
   product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_stocks_product")
@@ -141,6 +150,8 @@ model Sale {
   discountAmount Decimal    @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
   totalAmount    Decimal    @map("total_amount") @db.Decimal(15, 2)
   paymentMethod  String     @map("payment_method") @db.VarChar(50)
+  status         SaleStatus @default(completed)
+  isOffline      Boolean    @default(false) @map("is_offline")
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
   cashier        User       @relation("CashierSales", fields: [cashierUserId], references: [id], onUpdate: NoAction, map: "fk_sales_cashier")
   merchant       Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sales_merchant")
@@ -233,3 +244,86 @@ enum ProductStatus {
   active
   inactive
 }
+
+enum SaleStatus {
+  completed
+  voided
+  synced
+}
+
+enum MutationType {
+  sale
+  sale_cancel
+  transfer_out
+  transfer_in
+  adjustment
+  return
+}
+
+enum TransferStatus {
+  pending
+  approved
+  rejected
+  shipped
+  received
+  partial_received
+}
+
+model StockMutation {
+  id             BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  merchantId     BigInt       @map("merchant_id") @db.UnsignedBigInt
+  productId      BigInt       @map("product_id") @db.UnsignedBigInt
+  mutationType   MutationType @map("mutation_type")
+  quantityChange Int          @map("quantity_change")
+  referenceId    BigInt?      @map("reference_id") @db.UnsignedBigInt
+  createdBy      BigInt       @map("created_by") @db.UnsignedBigInt
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamp(0)
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user     User     @relation(fields: [createdBy], references: [id], onUpdate: NoAction)
+
+  @@index([merchantId])
+  @@index([productId])
+  @@map("stock_mutations")
+}
+
+model TransferRequest {
+  id             BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  fromMerchantId BigInt         @map("from_merchant_id") @db.UnsignedBigInt
+  toMerchantId   BigInt         @map("to_merchant_id") @db.UnsignedBigInt
+  status         TransferStatus @default(pending)
+  requestedBy    BigInt         @map("requested_by") @db.UnsignedBigInt
+  approvedBy     BigInt?        @map("approved_by") @db.UnsignedBigInt
+  notes          String?        @db.Text
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  fromMerchant Merchant       @relation("TransferFrom", fields: [fromMerchantId], references: [id], onUpdate: NoAction)
+  toMerchant   Merchant       @relation("TransferTo", fields: [toMerchantId], references: [id], onUpdate: NoAction)
+  requestUser  User           @relation("RequestedTransfers", fields: [requestedBy], references: [id], onUpdate: NoAction)
+  approveUser  User?          @relation("ApprovedTransfers", fields: [approvedBy], references: [id], onUpdate: NoAction)
+  items        TransferItem[]
+
+  @@index([fromMerchantId])
+  @@index([toMerchantId])
+  @@map("transfer_requests")
+}
+
+model TransferItem {
+  id                BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  transferRequestId BigInt @map("transfer_request_id") @db.UnsignedBigInt
+  productId         BigInt @map("product_id") @db.UnsignedBigInt
+  quantityRequested Int    @map("quantity_requested")
+  quantityApproved  Int    @default(0) @map("quantity_approved")
+  quantityShipped   Int    @default(0) @map("quantity_shipped")
+  quantityReceived  Int    @default(0) @map("quantity_received")
+
+  transferRequest TransferRequest @relation(fields: [transferRequestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product         Product         @relation(fields: [productId], references: [id], onUpdate: NoAction)
+
+  @@index([transferRequestId])
+  @@index([productId])
+  @@map("transfer_items")
+}
+

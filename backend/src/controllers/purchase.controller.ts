@@ -186,7 +186,7 @@ export async function createPurchase(req: Request, res: Response) {
               id: item.product.stock.id,
             },
             data: {
-              quantity: {
+              actualQuantity: {
                 increment: item.quantity,
               },
             },
@@ -196,7 +196,7 @@ export async function createPurchase(req: Request, res: Response) {
             data: {
               merchantId,
               productId: item.product.id,
-              quantity: item.quantity,
+              actualQuantity: item.quantity,
             },
           });
         }

@@ -83,9 +83,9 @@ export async function getStocks(req: Request, res: Response) {
       productId: item.product.id.toString(),
       productName: item.product.name,
       sku: item.product.sku,
-      quantity: item.quantity,
+      quantity: item.actualQuantity,
       reorderPoint: item.product.reorderPoint,
-      isLowStock: item.quantity <= item.product.reorderPoint,
+      isLowStock: item.actualQuantity <= item.product.reorderPoint,
       status: item.product.status,
       price: Number(item.product.price),
       category: item.product.category
@@ -164,9 +164,9 @@ export async function getStockDetail(req: Request, res: Response) {
         productId: stock.product.id.toString(),
         productName: stock.product.name,
         sku: stock.product.sku,
-        quantity: stock.quantity,
+        quantity: stock.actualQuantity,
         reorderPoint: stock.product.reorderPoint,
-        isLowStock: stock.quantity <= stock.product.reorderPoint,
+        isLowStock: stock.actualQuantity <= stock.product.reorderPoint,
         status: stock.product.status,
         price: Number(stock.product.price),
         category: stock.product.category
@@ -251,12 +251,12 @@ export async function adjustStock(req: Request, res: Response) {
       });
     }
 
-    let newQuantity = stock.quantity;
+    let newQuantity = stock.actualQuantity;
 
     if (parsed.data.type === 'add') {
-      newQuantity = stock.quantity + quantity;
+      newQuantity = stock.actualQuantity + quantity;
     } else if (parsed.data.type === 'subtract') {
-      newQuantity = stock.quantity - quantity;
+      newQuantity = stock.actualQuantity - quantity;
     } else if (parsed.data.type === 'set') {
       newQuantity = quantity;
     }
@@ -274,7 +274,7 @@ export async function adjustStock(req: Request, res: Response) {
           id: stock.id,
         },
         data: {
-          quantity: newQuantity,
+          actualQuantity: newQuantity,
         },
       });
 
@@ -299,8 +299,8 @@ export async function adjustStock(req: Request, res: Response) {
         stockId: updated.id.toString(),
         productId: stock.product.id.toString(),
         productName: stock.product.name,
-        previousQuantity: stock.quantity,
-        currentQuantity: updated.quantity,
+        previousQuantity: stock.actualQuantity,
+        currentQuantity: updated.actualQuantity,
       },
     });
   } catch (error) {

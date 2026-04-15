@@ -5,6 +5,7 @@ import {
   createCategory,
   createProduct,
   createUnit,
+  activateProduct,
   deactivateProduct,
   deleteCategory,
   deleteUnit,
@@ -30,7 +31,7 @@ router.post(
 router.get(
   '/categories',
   authMiddleware,
-  requireRole(['Owner', 'Gudang']),
+  requireRole(['Owner', 'Gudang', 'Kasir']),
   getCategories
 );
 
@@ -59,7 +60,7 @@ router.post(
 router.get(
   '/units',
   authMiddleware,
-  requireRole(['Owner', 'Gudang']),
+  requireRole(['Owner', 'Gudang', 'Kasir']),
   getUnits
 );
 
@@ -88,7 +89,7 @@ router.post(
 router.get(
   '/products',
   authMiddleware,
-  requireRole(['Owner', 'Gudang']),
+  requireRole(['Owner', 'Gudang', 'Kasir']),
   getProducts
 );
 
@@ -99,18 +100,26 @@ router.get(
   getProductDetail
 );
 
-router.patch(
-  '/products/:id',
-  authMiddleware,
-  requireRole(['Owner', 'Gudang']),
-  updateProduct
-);
-
+// Specific routes MUST come before general :id routes for correct matching
 router.patch(
   '/products/:id/deactivate',
   authMiddleware,
   requireRole(['Owner', 'Gudang']),
   deactivateProduct
+);
+
+router.patch(
+  '/products/:id/activate',
+  authMiddleware,
+  requireRole(['Owner', 'Gudang']),
+  activateProduct
+);
+
+router.patch(
+  '/products/:id',
+  authMiddleware,
+  requireRole(['Owner', 'Gudang']),
+  updateProduct
 );
 
 export default router;
