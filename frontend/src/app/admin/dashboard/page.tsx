@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { api } from "@/lib/api";
 import { clearActiveMerchant, getActiveMerchant } from "@/lib/auth";
+import { useMerchantModal } from "@/context/MerchantModalContext";
 
 // Dynamic import for ApexCharts to prevent SSR issues
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
@@ -96,6 +97,7 @@ function formatTime(value: string) {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { openSelectMerchant, openCreateMerchant } = useMerchantModal();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -118,21 +120,23 @@ export default function DashboardPage() {
           const merchants = meResult.data.merchants || [];
 
           if (merchants.length === 0) {
-            router.push("/create-merchant");
+            openCreateMerchant();
+            setLoading(false);
             return;
           }
 
-          if (merchants.length > 1) {
-            router.push("/select-merchant");
+          if (merchants.length === 1) {
+            localStorage.setItem("merchantId", merchants[0].merchantId);
+            localStorage.setItem("merchantName", merchants[0].merchantName);
+            localStorage.setItem("merchantRole", merchants[0].role);
+
+            setMerchantName(merchants[0].merchantName);
+            setMerchantRole(merchants[0].role);
+          } else {
+            openSelectMerchant();
+            setLoading(false);
             return;
           }
-
-          localStorage.setItem("merchantId", merchants[0].merchantId);
-          localStorage.setItem("merchantName", merchants[0].merchantName);
-          localStorage.setItem("merchantRole", merchants[0].role);
-
-          setMerchantName(merchants[0].merchantName);
-          setMerchantRole(merchants[0].role);
         } else {
           setMerchantName(activeMerchant.merchantName || "");
           setMerchantRole(activeMerchant.role || "");

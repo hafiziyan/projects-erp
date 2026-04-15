@@ -43,23 +43,25 @@ type CartItem = {
 };
 
 export default function SalesPage() {
-  const merchant = getActiveMerchant();
-
+  const [merchant, setMerchant] = useState<any>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Hydrate cart from local storage on mount
+  // Hydrate cart and merchant from local storage on mount
   useEffect(() => {
     try {
+      const active = getActiveMerchant();
+      setMerchant(active);
+
       const savedCart = localStorage.getItem("pos_cart");
       if (savedCart) {
         setCart(JSON.parse(savedCart));
       }
     } catch (e) {
-      console.error("Gagal melakukan load cart data dari storage", e);
+      console.error("Gagal melakukan load data dari storage", e);
     }
     setIsHydrated(true);
   }, []);

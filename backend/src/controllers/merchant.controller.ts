@@ -237,3 +237,82 @@ export async function getMerchantDetail(req: Request, res: Response) {
     });
   }
 }
+
+const updateMerchantSchema = z.object({
+  name: z.string().min(3, 'Nama merchant minimal 3 karakter').optional(),
+  address: z.string().optional(),
+  phone: z
+    .string()
+    .min(10, 'Nomor telepon minimal 10 angka')
+    .max(15, 'Nomor telepon maksimal 15 angka')
+    .regex(/^\d+$/, 'Nomor telepon hanya boleh berisi angka')
+    .optional()
+    .or(z.literal('')),
+  status: z.enum(['active', 'inactive']).optional(),
+});
+
+export async function updateMerchant(req: Request, res: Response) {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const merchantId = BigInt(req.params.id);
+    const userId = BigInt(authUser.userId);
+
+    const membership = await prisma.merchantUser.findFirst({
+      where: { merchantId, userId, role: { name: 'Owner' } },
+    });
+
+    if (!membership) {
+      return res.status(403).json({ success: false, message: 'Hanya Owner yang dapat mengubah data merchant' });
+    }
+
+    const parsed = updateMerchantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message });
+    }
+
+    const updated = await prisma.merchant.update({
+      where: { id: merchantId },
+      data: parsed.data,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Data merchant berhasil diperbarui',
+      data: updated,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Gagal memperbarui merchant' });
+  }
+}
+
+export async function deleteMerchant(req: Request, res: Response) {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const merchantId = BigInt(req.params.id);
+    const userId = BigInt(authUser.userId);
+
+    const membership = await prisma.merchantUser.findFirst({
+      where: { merchantId, userId, role: { name: 'Owner' } },
+    });
+
+    if (!membership) {
+      return res.status(403).json({ success: false, message: 'Hanya Owner yang dapat menghapus merchant' });
+    }
+
+    await prisma.merchant.update({
+      where: { id: merchantId },
+      data: { status: 'inactive' },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Merchant berhasil dinonaktifkan',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Gagal menghapus merchant' });
+  }
+}

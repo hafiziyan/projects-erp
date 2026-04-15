@@ -32,21 +32,7 @@ export default function SignInPage() {
     setError("");
 
     try {
-      const result = await api.post<any>("/auth/login", form);
-      const merchants = result.data.merchants || [];
-
-      if (merchants.length === 0) {
-        router.push("/create-merchant?from=onboarding");
-        return;
-      }
-
-      if (merchants.length === 1) {
-        saveActiveMerchant(merchants[0]);
-        router.push("/admin/dashboard");
-        return;
-      }
-
-      router.push("/select-merchant");
+      router.push("/admin/dashboard");
     } catch (err: any) {
       setError(err.message || "Login gagal");
     } finally {

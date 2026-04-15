@@ -69,6 +69,7 @@ Beberapa model utama dalam database:
 ## Sales & POS Module (Smart POS)
 - **Split-Screen Interface**: Layout khusus Terminal Kasir dengan katalog produk di kiri dan kontrol keranjang di kanan.
 - **Offline-First Synchronization**: Kapasitas menyimpan transaksi di lokal (IndexedDB) dan sinkronisasi ke server (menyelesaikan PRD `POS-03`). Flag `isOffline` mencegah bentrok data.
+- **Persistent Hydrated Cart**: State keranjang POS dilindungi dengan `localStorage` sinkron (Mencegah produk hilang dari keranjang ketika kasir berpindah halaman/refresh).
 - **Dynamic Filtering**: Filter produk berdasarkan kategori dan pencarian real-time (Nama/SKU).
 - **Transaction History**: Pencatatan riwayat lengkap dengan filter dan status (`completed`, `voided`, `synced`).
 - **Role-Based Access**: Dioptimalkan untuk role `Owner` dan `Kasir` untuk membatasi fitur-fitur kritikal.

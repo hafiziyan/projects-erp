@@ -48,20 +48,7 @@ export default function SignInPage() {
 
       setSuccess(result.message || "Login berhasil");
 
-      const merchants = result.data.merchants || [];
-
-      if (merchants.length === 0) {
-        router.push("/create-merchant");
-        return;
-      }
-
-      if (merchants.length === 1) {
-        saveActiveMerchant(merchants[0]);
-        router.push("/dashboard");
-        return;
-      }
-
-      router.push("/select-merchant");
+      router.push("/admin/dashboard");
     } catch (err: any) {
       setError(err.message || "Login gagal");
     } finally {
