@@ -33,8 +33,8 @@ export default function MerchantModal() {
   async function fetchMerchants() {
     try {
       setLoading(true);
-      const response = await api.get<{ merchants: any[] }>("/auth/me");
-      setMerchants(response.data?.merchants || []);
+      const response = await api.get<any>("/auth/me");
+      setMerchants(response.data?.merchants || []);;
     } catch (err) {
       console.error("Gagal mengambil data merchant", err);
     } finally {

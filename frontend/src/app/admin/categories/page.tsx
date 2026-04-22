@@ -10,12 +10,14 @@ type Category = {
 };
 
 export default function CategoriesPage() {
+  const [isMounted, setIsMounted] = useState(false);
+  const [merchant, setMerchant] = useState<any>(null);
+
   const [items, setItems] = useState<Category[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const merchant = getActiveMerchant();
 
   async function loadCategories() {
     try {
@@ -34,6 +36,11 @@ export default function CategoriesPage() {
   }
 
   useEffect(() => {
+    // 1. Set isMounted jadi true dan ambil data merchant HANYA saat di browser
+    setIsMounted(true);
+    setMerchant(getActiveMerchant());
+    
+    // 2. Load data kategori dari API
     loadCategories();
   }, []);
 
@@ -83,7 +90,7 @@ export default function CategoriesPage() {
           Master Categories
         </h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Merchant: {merchant?.merchantName || "-"} | Data kategori berlaku secara global.
+          Merchant: {isMounted && merchant?.merchantName ? merchant.merchantName : "-"} | Data kategori berlaku secara global.
         </p>
       </div>
 

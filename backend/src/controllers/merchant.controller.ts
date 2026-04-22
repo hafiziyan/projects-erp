@@ -256,7 +256,15 @@ export async function updateMerchant(req: Request, res: Response) {
     const authUser = req.authUser;
     if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-    const merchantId = BigInt(req.params.id);
+    // Pastikan id adalah string tunggal
+    const { id } = req.params;
+    const merchantIdStr = Array.isArray(id) ? id[0] : id;
+
+    if (!merchantIdStr) {
+        return res.status(400).json({ success: false, message: 'ID tidak valid' });
+    }
+
+    const merchantId = BigInt(merchantIdStr);
     const userId = BigInt(authUser.userId);
 
     const membership = await prisma.merchantUser.findFirst({
@@ -292,7 +300,14 @@ export async function deleteMerchant(req: Request, res: Response) {
     const authUser = req.authUser;
     if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-    const merchantId = BigInt(req.params.id);
+    const { id: rawId } = req.params;
+    const idString = Array.isArray(rawId) ? rawId[0] : rawId;
+
+    if (!idString || !/^\d+$/.test(idString)) {
+      return res.status(400).json({ success: false, message: 'ID merchant tidak valid' });
+    }
+
+    const merchantId = BigInt(idString);
     const userId = BigInt(authUser.userId);
 
     const membership = await prisma.merchantUser.findFirst({

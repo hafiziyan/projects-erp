@@ -113,10 +113,11 @@ export default function DashboardPage() {
       try {
         const activeMerchant = getActiveMerchant();
 
-        if (!activeMerchant?.merchantId) {
-          const meResult = await api.get<MeResponse>("/auth/me");
-          setUser(meResult.data.user);
+        // 1. Panggil API Me SATU KALI SAJA dengan parameter 'true' agar token ikut terkirim
+        const meResult = await api.get<MeResponse>("/auth/me", true);
+        setUser(meResult.data.user);
 
+        if (!activeMerchant?.merchantId) {
           const merchants = meResult.data.merchants || [];
 
           if (merchants.length === 0) {
@@ -142,9 +143,7 @@ export default function DashboardPage() {
           setMerchantRole(activeMerchant.role || "");
         }
 
-        const meData = await api.get<MeResponse>("/auth/me");
-        setUser(meData.data.user);
-
+        // 2. Panggil API Summary dengan parameter 'true'
         const dashboardResult = await api.get<DashboardResponse>(
           "/dashboard/summary",
           true
@@ -153,10 +152,11 @@ export default function DashboardPage() {
         setDashboard(dashboardResult.data);
       } catch (err: any) {
         const msg = err.message || "";
-        console.error("Dashboard init error:", msg);
+        console.error("Dashboard init error:", err); // Log full error object untuk debug
         
-        if (msg.includes("Unauthorized") || msg.includes("401")) {
-          // Jika unauthorized, bersihkan storage dan balik ke login
+        if (msg.includes("Unauthorized") || msg.includes("401") || err.status === 401) {
+          // Jika unauthorized, bersihkan SEMUA storage dan balik ke login
+          localStorage.removeItem("token"); // Tambahan: pastikan token juga dihapus
           localStorage.removeItem("merchantId");
           localStorage.removeItem("merchantName");
           localStorage.removeItem("merchantRole");
@@ -170,7 +170,7 @@ export default function DashboardPage() {
     }
 
     initDashboard();
-  }, [router]);
+  }, [router, openCreateMerchant, openSelectMerchant]);
 
   async function handleLogout() {
     try {
@@ -389,8 +389,8 @@ export default function DashboardPage() {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                          <div className="flex flex-col">
-                            <span>{formatDate(sale.createdAt)}</span>
-                            <span className="text-[10px] opacity-70">{formatTime(sale.createdAt)}</span>
+                           <span>{formatDate(sale.createdAt)}</span>
+                           <span className="text-[10px] opacity-70">{formatTime(sale.createdAt)}</span>
                          </div>
                         </td>
                         <td className="px-6 py-4 text-xs font-bold">

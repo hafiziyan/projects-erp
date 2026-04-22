@@ -32,9 +32,27 @@ export default function SignInPage() {
     setError("");
 
     try {
+      // 1. Tembak API Login Backend
+      const response = await api.post("/auth/login", form);
+      
+      // --- BAGIAN WAJIB UNTUK MENYIMPAN TOKEN ---
+      // Kita cek tokennya ada di mana (bisa di response.token atau response.data.token)
+      const token = response.token || response.data?.token;
+      
+      if (token) {
+        // Simpan ke localStorage dengan nama "token" sesuai dengan yang dicari di api.ts
+        localStorage.setItem("token", token);
+        console.log("Login sukses! Token berhasil disimpan."); // Pesan bantuan untuk ngecek di console
+      } else {
+        console.warn("PENTING: Backend membalas sukses, tapi tidak ada token di dalamnya:", response);
+      }
+      // ------------------------------------------
+
+      // 2. Jika sukses, baru arahkan ke dashboard
       router.push("/admin/dashboard");
     } catch (err: any) {
-      setError(err.message || "Login gagal");
+      // Tangkap error dari backend
+      setError(err.message || "Login gagal. Coba cek kembali email dan password Anda.");
     } finally {
       setLoading(false);
     }
@@ -82,7 +100,7 @@ export default function SignInPage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Password
                 </label>
-                <Link href="/forgot-password" size="sm" className="text-sm text-brand-500 hover:text-brand-600">
+                <Link href="/forgot-password" className="text-sm text-brand-500 hover:text-brand-600">
                   Forgot password?
                 </Link>
               </div>

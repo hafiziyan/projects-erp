@@ -9,6 +9,9 @@ type SidebarContextType = {
   setIsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   setIsMobileOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setIsHovered: React.Dispatch<React.SetStateAction<boolean>>;
+  
+  toggleSidebar: () => void;
+  toggleMobileSidebar: () => void;
 };
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -22,8 +25,18 @@ export function SidebarProvider({
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
+  // 1. Buat fungsi logic-nya di sini
+  const toggleSidebar = () => {
+    setIsExpanded((prev) => !prev);
+  };
+
+  const toggleMobileSidebar = () => {
+    setIsMobileOpen((prev) => !prev);
+  };
+
   return (
     <SidebarContext.Provider
+      // 2. Masukkan fungsinya ke dalam value
       value={{
         isExpanded,
         isMobileOpen,
@@ -31,6 +44,8 @@ export function SidebarProvider({
         setIsExpanded,
         setIsMobileOpen,
         setIsHovered,
+        toggleSidebar,
+        toggleMobileSidebar,
       }}
     >
       {children}

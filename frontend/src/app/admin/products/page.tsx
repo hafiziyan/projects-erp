@@ -336,28 +336,28 @@ export default function ProductsPage() {
               <form onSubmit={handleSubmit} className="space-y-6">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
-                       <Input label="Nama Produk" value={form.name} onChange={v => setForm(f => ({...f, name: v}))} placeholder="Contoh: Kopi Gula Aren" required />
+                       <Input label="Nama Produk" value={form.name} onChange={(v: string) => setForm(f => ({...f, name: v}))} placeholder="Contoh: Kopi Gula Aren" required />
                     </div>
                     <div>
-                       <Input label="SKU (Opsional)" value={form.sku} onChange={v => setForm(f => ({...f, sku: v}))} placeholder="SKU-001" />
+                       <Input label="SKU (Opsional)" value={form.sku} onChange={(v: string) => setForm(f => ({...f, sku: v}))} placeholder="SKU-001" />
                     </div>
                     <div>
-                       <Input label="Harga Satuan (Rp)" type="number" value={form.price} onChange={v => setForm(f => ({...f, price: v}))} placeholder="0" required />
+                      <Input label="Harga Satuan (Rp)" type="number" value={form.price} onChange={(v: string) => setForm(f => ({...f, price: v}))} placeholder="0" required />
                     </div>
                     <div>
-                       <Select label="Kategori" value={form.categoryId} onChange={v => setForm(f => ({...f, categoryId: v}))} options={categories.map(c => ({label: c.name, value: c.id}))} />
+                       <Select label="Kategori" value={form.categoryId} onChange={(v: string) => setForm(f => ({...f, categoryId: v}))} options={categories.map(c => ({label: c.name, value: c.id}))} />
+                    <div>
+                       <Select label="Satuan (Unit)" value={form.unitId} onChange={(v: string) => setForm(f => ({...f, unitId: v}))} options={units.map(u => ({label: u.name, value: u.id}))} />
                     </div>
                     <div>
-                       <Select label="Satuan (Unit)" value={form.unitId} onChange={v => setForm(f => ({...f, unitId: v}))} options={units.map(u => ({label: u.name, value: u.id}))} />
-                    </div>
-                    <div>
-                       <Input label="Titik Restock (Min)" type="number" value={form.reorderPoint} onChange={v => setForm(f => ({...f, reorderPoint: v}))} placeholder="5" />
+                       <Input label="Titik Restock (Min)" type="number" value={form.reorderPoint} onChange={(v: string) => setForm(f => ({...f, reorderPoint: v}))} placeholder="5" />
                     </div>
                     {!editingProduct && (
                        <div>
-                          <Input label="Stok Awal" type="number" value={form.initialStock} onChange={v => setForm(f => ({...f, initialStock: v}))} placeholder="0" />
+                          <Input label="Stok Awal" type="number" value={form.initialStock} onChange={(v: string) => setForm(f => ({...f, initialStock: v}))} placeholder="0" />
                        </div>
                     )}
+                    </div>
                  </div>
 
                  {error && <div className="rounded-2xl bg-rose-50 p-4 text-xs font-bold text-rose-500 border border-rose-100">{error}</div>}
