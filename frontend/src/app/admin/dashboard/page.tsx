@@ -152,11 +152,11 @@ export default function DashboardPage() {
         setDashboard(dashboardResult.data);
       } catch (err: any) {
         const msg = err.message || "";
-        console.error("Dashboard init error:", err); // Log full error object untuk debug
+        console.error("Dashboard init error:", err); 
         
         if (msg.includes("Unauthorized") || msg.includes("401") || err.status === 401) {
           // Jika unauthorized, bersihkan SEMUA storage dan balik ke login
-          localStorage.removeItem("token"); // Tambahan: pastikan token juga dihapus
+          localStorage.removeItem("token");
           localStorage.removeItem("merchantId");
           localStorage.removeItem("merchantName");
           localStorage.removeItem("merchantRole");
@@ -179,6 +179,10 @@ export default function DashboardPage() {
       // ignore
     } finally {
       clearActiveMerchant();
+      // PENYESUAIAN PENTING: Pastikan token juga dihancurkan saat logout
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("token");
+      }
       router.push("/signin");
     }
   }
@@ -220,7 +224,7 @@ export default function DashboardPage() {
 
   const chartSeries = [{
     name: 'Total Sales',
-    data: [30, 40, 35, 50, 49, 60, 70, 91, 125, 110, 140, 110].map(v => v * 100000) // Mock data based on trends
+    data: [30, 40, 35, 50, 49, 60, 70, 91, 125, 110, 140, 110].map(v => v * 100000) 
   }];
 
   if (loading) {
