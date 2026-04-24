@@ -114,7 +114,7 @@ export default function LandingPage() {
                   href="/signup"
                   className="rounded-xl bg-brand-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-500/20 transition hover:-translate-y-0.5 hover:bg-brand-600"
                 >
-                  Mulai Sekarang
+                  Daftar Sekarang
                 </Link>
                 <Link
                   href="/signin"

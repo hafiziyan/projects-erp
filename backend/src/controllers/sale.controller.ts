@@ -152,7 +152,7 @@ export async function createSale(req: Request, res: Response) {
         throw new Error('STOCK_NOT_FOUND');
       }
 
-      if (product.stock.quantity < (item.quantity as number)) {
+      if (product.stock.actualQuantity < (item.quantity as number)) {
         throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
       }
 
@@ -207,7 +207,7 @@ export async function createSale(req: Request, res: Response) {
             productId: item.product.id,
           },
           data: {
-            quantity: {
+            actualQuantity: {
               decrement: item.quantity,
             },
           },

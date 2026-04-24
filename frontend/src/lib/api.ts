@@ -16,24 +16,39 @@ export async function apiFetch<T = any>(
     "Content-Type": "application/json",
   };
 
-  if (typeof window !== "undefined" && useMerchant) {
-    const merchantId = localStorage.getItem("merchantId");
-    if (merchantId) {
-      headers["x-merchant-id"] = merchantId;
+  // AMBIL TOKEN DAN MERCHANT ID DARI LOCAL STORAGE (JIKA DI BROWSER)
+  if (typeof window !== "undefined") {
+    // 1. Ambil Token JWT
+    // PENTING: Pastikan kata "token" di bawah ini sama persis dengan nama key 
+    // saat kamu menyimpan token di halaman Sign In (misal: localStorage.setItem("token", ...))
+    const token = localStorage.getItem("token"); 
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    // 2. Ambil Merchant ID
+    if (useMerchant) {
+      const merchantId = localStorage.getItem("merchantId");
+      if (merchantId) {
+        headers["x-merchant-id"] = merchantId;
+      }
     }
   }
 
   const response = await fetch(`${API_URL}${endpoint}`, {
     method,
     headers,
-    credentials: "include",
+    credentials: "include", // <--- TANDA // DI DEPANNYA SUDAH DIHAPUS
     body: body ? JSON.stringify(body) : undefined,
   });
 
   const result = await response.json();
 
   if (!response.ok) {
-    throw new Error(result?.message || "Terjadi kesalahan");
+    // Melempar error dengan status agar bisa ditangkap oleh blok catch di page.tsx
+    const error: any = new Error(result?.message || "Terjadi kesalahan");
+    error.status = response.status;
+    throw error;
   }
 
   return result;

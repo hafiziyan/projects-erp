@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import path from 'path'; // Tambahkan import path
 import authRoutes from './routes/auth.routes';
 import merchantRoutes from './routes/merchant.routes';
 import userManagementRoutes from './routes/user-management.routes';
