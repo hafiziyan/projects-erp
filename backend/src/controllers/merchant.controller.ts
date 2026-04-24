@@ -2,10 +2,17 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 
+// Schema dengan validasi angka saja dan batasan karakter
 const createMerchantSchema = z.object({
   name: z.string().min(3, 'Nama merchant minimal 3 karakter'),
   address: z.string().optional(),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .min(10, 'Nomor telepon minimal 10 angka')
+    .max(15, 'Nomor telepon maksimal 15 angka')
+    .regex(/^\d+$/, 'Nomor telepon hanya boleh berisi angka')
+    .optional()
+    .or(z.literal('')), // Memungkinkan string kosong jika tidak diisi
 });
 
 export async function createMerchant(req: Request, res: Response) {
@@ -228,5 +235,99 @@ export async function getMerchantDetail(req: Request, res: Response) {
       success: false,
       message: 'Terjadi kesalahan server',
     });
+  }
+}
+
+const updateMerchantSchema = z.object({
+  name: z.string().min(3, 'Nama merchant minimal 3 karakter').optional(),
+  address: z.string().optional(),
+  phone: z
+    .string()
+    .min(10, 'Nomor telepon minimal 10 angka')
+    .max(15, 'Nomor telepon maksimal 15 angka')
+    .regex(/^\d+$/, 'Nomor telepon hanya boleh berisi angka')
+    .optional()
+    .or(z.literal('')),
+  status: z.enum(['active', 'inactive']).optional(),
+});
+
+export async function updateMerchant(req: Request, res: Response) {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    // Pastikan id adalah string tunggal
+    const { id } = req.params;
+    const merchantIdStr = Array.isArray(id) ? id[0] : id;
+
+    if (!merchantIdStr) {
+        return res.status(400).json({ success: false, message: 'ID tidak valid' });
+    }
+
+    const merchantId = BigInt(merchantIdStr);
+    const userId = BigInt(authUser.userId);
+
+    const membership = await prisma.merchantUser.findFirst({
+      where: { merchantId, userId, role: { name: 'Owner' } },
+    });
+
+    if (!membership) {
+      return res.status(403).json({ success: false, message: 'Hanya Owner yang dapat mengubah data merchant' });
+    }
+
+    const parsed = updateMerchantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message });
+    }
+
+    const updated = await prisma.merchant.update({
+      where: { id: merchantId },
+      data: parsed.data,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Data merchant berhasil diperbarui',
+      data: updated,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Gagal memperbarui merchant' });
+  }
+}
+
+export async function deleteMerchant(req: Request, res: Response) {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const { id: rawId } = req.params;
+    const idString = Array.isArray(rawId) ? rawId[0] : rawId;
+
+    if (!idString || !/^\d+$/.test(idString)) {
+      return res.status(400).json({ success: false, message: 'ID merchant tidak valid' });
+    }
+
+    const merchantId = BigInt(idString);
+    const userId = BigInt(authUser.userId);
+
+    const membership = await prisma.merchantUser.findFirst({
+      where: { merchantId, userId, role: { name: 'Owner' } },
+    });
+
+    if (!membership) {
+      return res.status(403).json({ success: false, message: 'Hanya Owner yang dapat menghapus merchant' });
+    }
+
+    await prisma.merchant.update({
+      where: { id: merchantId },
+      data: { status: 'inactive' },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Merchant berhasil dinonaktifkan',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Gagal menghapus merchant' });
   }
 }

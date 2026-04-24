@@ -65,7 +65,7 @@ export async function getDashboardSummary(req: Request, res: Response) {
           merchantId,
         },
         _sum: {
-          quantity: true,
+          actualQuantity: true,
         },
       }),
       prisma.stock.findMany({
@@ -141,17 +141,17 @@ export async function getDashboardSummary(req: Request, res: Response) {
     ]);
 
     const lowStockCount = lowStockProducts.filter(
-      (item) => item.quantity <= item.product.reorderPoint
+      (item) => item.actualQuantity <= item.product.reorderPoint
     ).length;
 
     const lowStockItems = lowStockList
-      .filter((item) => item.quantity <= item.product.reorderPoint)
+      .filter((item) => item.actualQuantity <= item.product.reorderPoint)
       .slice(0, 10)
       .map((item) => ({
         productId: item.product.id.toString(),
         productName: item.product.name,
         sku: item.product.sku,
-        quantity: item.quantity,
+        actualQuantity: item.actualQuantity,
         reorderPoint: item.product.reorderPoint,
         category: item.product.category
           ? {
@@ -174,7 +174,7 @@ export async function getDashboardSummary(req: Request, res: Response) {
           totalProducts,
           totalCategories,
           totalUsers,
-          totalStockQuantity: totalStocks._sum.quantity ?? 0,
+          totalStockQuantity: totalStocks._sum.actualQuantity ?? 0,
           lowStockCount,
           todaySales: Number(todaySalesAgg._sum.totalAmount ?? 0),
           monthSales: Number(monthSalesAgg._sum.totalAmount ?? 0),
