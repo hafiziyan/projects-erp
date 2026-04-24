@@ -25,6 +25,16 @@ type Purchase = {
   createdAt: string;
 };
 
+// --- Type Baru untuk Detail Item ---
+type PurchaseItemDetail = {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  cost: number;
+  subtotal: number;
+};
+
 type PurchaseItemForm = {
   productId: string;
   quantity: string;
@@ -51,6 +61,11 @@ export default function PurchasesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // --- State Baru untuk Detail ---
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [details, setDetails] = useState<PurchaseItemDetail[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   useEffect(() => {
     setMerchant(getActiveMerchant());
     setMounted(true);
@@ -72,6 +87,28 @@ export default function PurchasesPage() {
       setError(err.message || "Gagal memuat data purchase");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // --- Fungsi Baru Load Detail ---
+  async function loadPurchaseDetail(purchaseId: string) {
+    if (expandedId === purchaseId) {
+      setExpandedId(null);
+      return;
+    }
+
+    try {
+      setExpandedId(purchaseId);
+      setDetailLoading(true);
+      const res = await api.get<{ success: boolean; data: PurchaseItemDetail[] }>(
+        `/purchases/${purchaseId}`,
+        true
+      );
+      setDetails(res.data || []);
+    } catch (err: any) {
+      console.error("Gagal memuat detail purchase", err);
+    } finally {
+      setDetailLoading(false);
     }
   }
 
@@ -130,6 +167,7 @@ export default function PurchasesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header Section */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-white/5">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-white/90">
           Purchases
@@ -146,6 +184,7 @@ export default function PurchasesPage() {
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        {/* Form Create Purchase */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-white/5 xl:col-span-1">
           <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
             Create Purchase
@@ -160,7 +199,7 @@ export default function PurchasesPage() {
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
                 placeholder="Optional"
-                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none dark:border-gray-700"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm outline-none dark:border-gray-700 dark:text-white"
               />
             </div>
 
@@ -174,11 +213,11 @@ export default function PurchasesPage() {
                     <select
                       value={item.productId}
                       onChange={(e) => updateItem(index, "productId", e.target.value)}
-                      className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm outline-none dark:border-gray-700"
+                      className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm outline-none dark:border-gray-700 dark:text-white"
                     >
-                      <option value="">Select Product</option>
+                      <option value="" className="dark:bg-gray-900">Select Product</option>
                       {products.map((product) => (
-                        <option key={product.id} value={product.id}>
+                        <option key={product.id} value={product.id} className="dark:bg-gray-900">
                           {product.name}
                         </option>
                       ))}
@@ -189,7 +228,7 @@ export default function PurchasesPage() {
                       value={item.quantity}
                       onChange={(e) => updateItem(index, "quantity", e.target.value)}
                       placeholder="Quantity"
-                      className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm outline-none dark:border-gray-700"
+                      className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm outline-none dark:border-gray-700 dark:text-white"
                     />
 
                     <input
@@ -197,7 +236,7 @@ export default function PurchasesPage() {
                       value={item.cost}
                       onChange={(e) => updateItem(index, "cost", e.target.value)}
                       placeholder="Cost"
-                      className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm outline-none dark:border-gray-700"
+                      className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm outline-none dark:border-gray-700 dark:text-white"
                     />
 
                     {items.length > 1 && (
@@ -217,13 +256,13 @@ export default function PurchasesPage() {
             <button
               type="button"
               onClick={addItemRow}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium dark:border-gray-700"
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium dark:border-gray-700 dark:text-gray-300"
             >
               Add Item Row
             </button>
 
             <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
-              <div className="flex items-center justify-between font-semibold">
+              <div className="flex items-center justify-between font-semibold text-gray-800 dark:text-white">
                 <span>Total</span>
                 <span>Rp {totalAmount.toLocaleString("id-ID")}</span>
               </div>
@@ -239,6 +278,7 @@ export default function PurchasesPage() {
           </form>
         </div>
 
+        {/* Purchase History Section */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-white/5 xl:col-span-2">
           <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
             Purchase History
@@ -253,29 +293,74 @@ export default function PurchasesPage() {
           ) : (
             <div className="space-y-3">
               {purchases.map((purchase) => (
-                <div
-                  key={purchase.purchaseId}
-                  className="rounded-xl border border-gray-200 p-4 dark:border-gray-800"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-800 dark:text-white/90">
-                        {purchase.invoiceNumber || "-"}
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        User: {purchase.user?.name || "-"} • Items: {purchase.totalItems}
-                      </p>
-                    </div>
+                <div key={purchase.purchaseId} className="space-y-2">
+                  <div
+                    onClick={() => loadPurchaseDetail(purchase.purchaseId)}
+                    className={`cursor-pointer rounded-xl border p-4 transition-colors ${
+                      expandedId === purchase.purchaseId
+                        ? "border-brand-500 bg-brand-50/10"
+                        : "border-gray-200 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-gray-800 dark:text-white/90">
+                            {purchase.invoiceNumber || "No Invoice"}
+                          </h3>
+                          <span className="text-[10px] text-brand-500 font-medium">
+                            {expandedId === purchase.purchaseId ? "▲ Hide Details" : "▼ Show Details"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          User: {purchase.user?.name || "-"} • Items: {purchase.totalItems}
+                        </p>
+                      </div>
 
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-800 dark:text-white/90">
-                        Rp {purchase.totalAmount.toLocaleString("id-ID")}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {new Date(purchase.createdAt).toLocaleString("id-ID")}
-                      </p>
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-800 dark:text-white/90">
+                          Rp {purchase.totalAmount.toLocaleString("id-ID")}
+                        </p>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {new Date(purchase.createdAt).toLocaleString("id-ID")}
+                        </p>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Expandable Detail Table */}
+                  {expandedId === purchase.purchaseId && (
+                    <div className="mx-2 overflow-hidden rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800 dark:bg-gray-900/40">
+                      {detailLoading ? (
+                        <p className="text-center text-xs text-gray-400">Loading items...</p>
+                      ) : (
+                        <table className="w-full text-left text-xs">
+                          <thead className="border-b border-gray-200 text-gray-500 dark:border-gray-700">
+                            <tr>
+                              <th className="pb-2 font-medium">Product</th>
+                              <th className="pb-2 text-right font-medium">Qty</th>
+                              <th className="pb-2 text-right font-medium">Cost</th>
+                              <th className="pb-2 text-right font-medium">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {details.map((det) => (
+                              <tr key={det.id}>
+                                <td className="py-2 text-gray-700 dark:text-gray-300">{det.productName}</td>
+                                <td className="py-2 text-right text-gray-600 dark:text-gray-400">{det.quantity}</td>
+                                <td className="py-2 text-right text-gray-600 dark:text-gray-400">
+                                  {det.cost.toLocaleString("id-ID")}
+                                </td>
+                                <td className="py-2 text-right font-medium text-gray-700 dark:text-white">
+                                  {det.subtotal.toLocaleString("id-ID")}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

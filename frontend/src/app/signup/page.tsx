@@ -10,14 +10,19 @@ export default function SignUpPage() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // State untuk show/hide password
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     email: "",
     password: "",
+    confirmPassword: "",
     agree: false,
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -41,9 +46,14 @@ export default function SignUpPage() {
     };
   }, [form.password]);
 
+  // Logic pengecekan kesamaan password
+  const passwordsMatch = useMemo(() => {
+    return form.password.length > 0 && form.password === form.confirmPassword;
+  }, [form.password, form.confirmPassword]);
+
   const isPasswordStrong = Object.values(passwordCriteria).every(Boolean);
 
-  async function handleSubmit(e: FormEvent) {
+ async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -60,7 +70,14 @@ export default function SignUpPage() {
       return;
     }
 
+    if (!passwordsMatch) {
+      setError("Konfirmasi password tidak cocok.");
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Backend tetap menerima data yang sama seperti sebelumnya
       const result = await api.post("/auth/register", {
         name: fullName,
         email: form.email,
@@ -69,8 +86,13 @@ export default function SignUpPage() {
 
       setSuccess(result.message || "Registrasi berhasil");
       setTimeout(() => router.push("/signin"), 1500);
-    } catch (err: any) {
-      setError(err.message || "Registrasi gagal");
+    } catch (err: unknown) {
+      // Menggunakan type guard agar TypeScript tidak error
+      if (err instanceof Error) {
+        setError(err.message || "Registrasi gagal");
+      } else {
+        setError("Registrasi gagal");
+      }
     } finally {
       setLoading(false);
     }
@@ -102,6 +124,7 @@ export default function SignUpPage() {
 
             <input type="email" required placeholder="Email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="h-11 w-full rounded-lg border border-gray-300 px-4 text-sm bg-transparent outline-none focus:border-brand-500 dark:border-gray-700 dark:text-white" />
 
+            {/* Input Password Utama */}
             <div>
               <div className="relative">
                 <input
@@ -112,10 +135,12 @@ export default function SignUpPage() {
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   className="h-11 w-full rounded-lg border border-gray-300 px-4 text-sm bg-transparent outline-none focus:border-brand-500 dark:border-gray-700 dark:text-white"
                 />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-brand-500">
                   {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
+              
+              {/* Indikator Keamanan Password */}
               <div className="mt-3 grid grid-cols-2 gap-x-2 gap-y-1">
                 <p className={`text-[10px] flex items-center gap-1 ${passwordCriteria.length ? 'text-green-500' : 'text-gray-400'}`}>
                   <span className={`h-1 w-1 rounded-full ${passwordCriteria.length ? 'bg-green-500' : 'bg-gray-300'}`} /> Min. 8 Karakter
@@ -132,6 +157,30 @@ export default function SignUpPage() {
               </div>
             </div>
 
+            {/* Input Konfirmasi Password */}
+            <div>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  required
+                  placeholder="Confirm Password"
+                  value={form.confirmPassword}
+                  onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                  className={`h-11 w-full rounded-lg border px-4 text-sm bg-transparent outline-none transition ${
+                    form.confirmPassword 
+                      ? (passwordsMatch ? "border-green-500 focus:border-green-500" : "border-red-500 focus:border-red-500") 
+                      : "border-gray-300 focus:border-brand-500"
+                  } dark:border-gray-700 dark:text-white`}
+                />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-brand-500">
+                  {showConfirmPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              {form.confirmPassword && !passwordsMatch && (
+                <p className="mt-1 text-[10px] text-red-500 italic">Password tidak sama</p>
+              )}
+            </div>
+
             <label className="flex items-start gap-3">
               <input type="checkbox" checked={form.agree} onChange={(e) => setForm({...form, agree: e.target.checked})} className="mt-1" />
               <span className="text-xs text-gray-500">I agree to the Terms and Privacy Policy.</span>
@@ -140,7 +189,15 @@ export default function SignUpPage() {
             {error && <div className="rounded-lg bg-red-50 p-3 text-xs text-red-600 dark:bg-red-500/10">{error}</div>}
             {success && <div className="rounded-lg bg-green-50 p-3 text-xs text-green-600 dark:bg-green-500/10">{success}</div>}
 
-            <button type="submit" disabled={loading} className="w-full rounded-lg bg-brand-500 py-3 text-sm font-medium text-white hover:bg-brand-600 transition">
+            <button 
+              type="submit" 
+              disabled={loading || !passwordsMatch || !isPasswordStrong} 
+              className={`w-full rounded-lg py-3 text-sm font-medium text-white transition ${
+                loading || !passwordsMatch || !isPasswordStrong 
+                  ? "bg-gray-400 cursor-not-allowed" 
+                  : "bg-brand-500 hover:bg-brand-600 shadow-md"
+              }`}
+            >
               {loading ? "Signing up..." : "Sign Up"}
             </button>
           </form>

@@ -19,6 +19,18 @@ type StockItem = {
   updatedAt: string;
 };
 
+// --- Type Baru untuk History ---
+type StockHistory = {
+  id: string;
+  type: "add" | "subtract" | "set" | "sale" | "return";
+  adjustment: number;
+  previousStock: number;
+  currentStock: number;
+  note: string;
+  userName: string; // Siapa yang ngubah
+  createdAt: string;
+};
+
 export default function StocksPage() {
   const merchant = getActiveMerchant();
 
@@ -34,6 +46,11 @@ export default function StocksPage() {
     quantity: "0",
     note: "",
   });
+
+  // --- State Baru untuk History ---
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [stockHistory, setStockHistory] = useState<StockHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   async function loadStocks() {
     try {
@@ -54,6 +71,28 @@ export default function StocksPage() {
       setError(err.message || "Gagal memuat stok");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // --- Fungsi Baru untuk Load History ---
+  async function loadHistory(productId: string) {
+    if (historyId === productId) {
+      setHistoryId(null);
+      return;
+    }
+
+    try {
+      setHistoryId(productId);
+      setHistoryLoading(true);
+      const result = await api.get<{ success: boolean; data: StockHistory[] }>(
+        `/stocks/${productId}/history`,
+        true
+      );
+      setStockHistory(result.data || []);
+    } catch (err: any) {
+      console.error("Gagal memuat histori", err);
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -81,6 +120,8 @@ export default function StocksPage() {
         note: "",
       });
       await loadStocks();
+      // Reset history agar data terbaru muncul jika sedang dibuka
+      if (historyId === productId) loadHistory(productId);
     } catch (err: any) {
       setError(err.message || "Gagal adjustment stok");
     }
@@ -88,6 +129,7 @@ export default function StocksPage() {
 
   return (
     <div className="space-y-6">
+      {/* ... (Header, Search, & Error UI tetap sama) ... */}
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -149,183 +191,163 @@ export default function StocksPage() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
             <thead className="bg-gray-50/50 dark:bg-gray-800/50">
               <tr>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Product Info
-                </th>
-                <th scope="col" className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Pricing (Rp)
-                </th>
-                <th scope="col" className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Stock Level
-                </th>
-                <th scope="col" className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Actions
-                </th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Product Info</th>
+                <th scope="col" className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Pricing (Rp)</th>
+                <th scope="col" className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Stock Level</th>
+                <th scope="col" className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
+                <th scope="col" className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-transparent">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent"></div>
-                      Membagikan data inventaris...
-                    </div>
-                  </td>
-                </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    <div className="flex flex-col items-center justify-center py-6">
-                      <svg className="mb-3 h-12 w-12 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                      </svg>
-                      Tidak ada data stok yang ditemukan.
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                items.map((item) => (
-                  <React.Fragment key={item.stockId}>
-                    <tr className="transition-colors hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-gray-900 dark:text-white">
-                            {item.productName}
+              {!loading && items.map((item) => (
+                <React.Fragment key={item.stockId}>
+                  <tr className="transition-colors hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-gray-900 dark:text-white">{item.productName}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">{item.sku || "NO-SKU"}</span>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                            {item.category?.name || "Uncategorized"}
                           </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
-                            {item.sku || "NO-SKU"}
+                          <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            {item.unit?.name || "pcs"}
                           </span>
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                              {item.category?.name || "Uncategorized"}
-                            </span>
-                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                              {item.unit?.name || "pcs"}
-                            </span>
-                          </div>
                         </div>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-right">
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          Rp {item.price.toLocaleString("id-ID")}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <div className="flex flex-col items-center justify-center text-sm">
-                          <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-white">
-                            <span className="text-lg">{item.quantity}</span>
-                          </div>
-                          <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                            <span title="Reserved Stock" className="flex items-center gap-1">
-                               <span className="h-1.5 w-1.5 rounded-full bg-orange-400"></span>
-                               Res: {(item as any).reservedQuantity || 0}
-                            </span>
-                            <span title="Reorder Point" className="flex items-center gap-1">
-                               <span className="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
-                               Min: {item.reorderPoint}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                            item.isLowStock
-                              ? "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20"
-                              : "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20"
-                          }`}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-right font-medium text-gray-900 dark:text-white">
+                      Rp {item.price.toLocaleString("id-ID")}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-center">
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">{item.quantity}</span>
+                      <div className="text-[10px] text-gray-400 mt-1">Min: {item.reorderPoint}</div>
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-center">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${item.isLowStock ? "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${item.isLowStock ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+                        {item.isLowStock ? "Low Stock" : "Sufficient"}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        {/* Tombol History Baru */}
+                        <button
+                          onClick={() => loadHistory(item.productId)}
+                          className="p-2 text-gray-500 hover:text-brand-600 transition-colors"
+                          title="View History"
                         >
-                          <span className={`h-1.5 w-1.5 rounded-full ${item.isLowStock ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
-                          {item.isLowStock ? "Low Stock" : "Sufficient"}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
                         <button
                           onClick={() => setAdjustingId(adjustingId === item.productId ? null : item.productId)}
-                          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-750 dark:hover:text-brand-400"
+                          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                         >
-                          <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                          </svg>
                           Adjust
                         </button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* --- ROW HISTORY --- */}
+                  {historyId === item.productId && (
+                    <tr className="bg-gray-50/50 dark:bg-gray-800/20">
+                      <td colSpan={5} className="px-6 py-4">
+                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-inner dark:border-gray-700 dark:bg-gray-900">
+                          <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Stock Movement History</h4>
+                          {historyLoading ? (
+                            <div className="py-4 text-center text-xs text-gray-400 animate-pulse">Loading history...</div>
+                          ) : stockHistory.length === 0 ? (
+                            <div className="py-4 text-center text-xs text-gray-400">Belum ada catatan perubahan.</div>
+                          ) : (
+                            <div className="max-h-60 overflow-y-auto">
+                              <table className="w-full text-left text-xs">
+                                <thead className="border-b border-gray-100 dark:border-gray-800">
+                                  <tr>
+                                    <th className="pb-2 font-semibold">Date</th>
+                                    <th className="pb-2 font-semibold">Type</th>
+                                    <th className="pb-2 font-semibold text-right">Qty</th>
+                                    <th className="pb-2 font-semibold text-right">Result</th>
+                                    <th className="pb-2 font-semibold pl-4">Note / User</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                                  {stockHistory.map((h) => (
+                                    <tr key={h.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                      <td className="py-2 text-gray-500">{new Date(h.createdAt).toLocaleString('id-ID')}</td>
+                                      <td className="py-2 capitalize font-medium">{h.type}</td>
+                                      <td className={`py-2 text-right font-bold ${h.adjustment > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                        {h.adjustment > 0 ? `+${h.adjustment}` : h.adjustment}
+                                      </td>
+                                      <td className="py-2 text-right font-mono">{h.currentStock}</td>
+                                      <td className="py-2 pl-4">
+                                        <div className="text-gray-900 dark:text-gray-200">{h.note || "-"}</div>
+                                        <div className="text-[10px] text-gray-400">by {h.userName}</div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                    
-                    {/** Expandable Adjustment Row **/}
-                    {adjustingId === item.productId && (
-                      <tr className="bg-brand-50/50 dark:bg-brand-900/10">
-                        <td colSpan={5} className="px-6 py-4 border-l-4 border-brand-500">
-                          <div className="flex flex-col gap-4 rounded-xl border border-brand-100 bg-white p-5 shadow-sm dark:border-brand-900/30 dark:bg-gray-900">
-                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                              <svg className="h-4 w-4 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                              </svg>
-                              New Adjustment Entry
-                            </h4>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 items-end">
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Action Type</label>
-                                <select
-                                  value={adjustForm.type}
-                                  onChange={(e) => setAdjustForm((prev) => ({ ...prev, type: e.target.value }))}
-                                  className="block w-full rounded-xl border border-gray-300 bg-gray-50 py-2.5 px-3 text-sm text-gray-900 focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                >
-                                  <option value="add">Add (Restock)</option>
-                                  <option value="subtract">Subtract (Damage/Loss)</option>
-                                  <option value="set">Set Exact Count</option>
-                                </select>
-                              </div>
+                  )}
 
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Quantity</label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={adjustForm.quantity}
-                                  onChange={(e) => setAdjustForm((prev) => ({ ...prev, quantity: e.target.value }))}
-                                  placeholder="0"
-                                  className="block w-full rounded-xl border border-gray-300 bg-gray-50 py-2.5 px-3 text-sm text-gray-900 focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Reference / Note</label>
-                                <input
-                                  type="text"
-                                  value={adjustForm.note}
-                                  onChange={(e) => setAdjustForm((prev) => ({ ...prev, note: e.target.value }))}
-                                  placeholder="e.g. Audit Bulanan"
-                                  className="block w-full rounded-xl border border-gray-300 bg-gray-50 py-2.5 px-3 text-sm text-gray-900 focus:border-brand-500 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-                                />
-                              </div>
-
-                              <div className="flex space-x-3">
-                                <button
-                                  onClick={() => setAdjustingId(null)}
-                                  className="w-full rounded-xl border border-gray-300 bg-white py-2.5 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => handleAdjust(item.productId)}
-                                  className="w-full rounded-xl border border-transparent bg-brand-600 py-2.5 px-3 text-sm font-medium text-white shadow-sm hover:focus:ring-brand-500 dark:bg-brand-500 dark:hover:bg-brand-600 transition-colors"
-                                >
-                                  Confirm
-                                </button>
-                              </div>
+                  {/* --- ROW ADJUSTMENT (Existing) --- */}
+                  {adjustingId === item.productId && (
+                    <tr className="bg-brand-50/50 dark:bg-brand-900/10">
+                      <td colSpan={5} className="px-6 py-4 border-l-4 border-brand-500">
+                        <div className="flex flex-col gap-4 rounded-xl border border-brand-100 bg-white p-5 shadow-sm dark:border-brand-900/30 dark:bg-gray-900">
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                             New Adjustment Entry
+                          </h4>
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 items-end">
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-gray-700">Action Type</label>
+                              <select
+                                value={adjustForm.type}
+                                onChange={(e) => setAdjustForm((prev) => ({ ...prev, type: e.target.value }))}
+                                className="block w-full rounded-xl border border-gray-300 py-2.5 px-3 text-sm dark:bg-gray-800"
+                              >
+                                <option value="add">Add (Restock)</option>
+                                <option value="subtract">Subtract (Damage/Loss)</option>
+                                <option value="set">Set Exact Count</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-gray-700">Quantity</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={adjustForm.quantity}
+                                onChange={(e) => setAdjustForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                                className="block w-full rounded-xl border border-gray-300 py-2.5 px-3 text-sm dark:bg-gray-800"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-gray-700">Reference / Note</label>
+                              <input
+                                type="text"
+                                value={adjustForm.note}
+                                onChange={(e) => setAdjustForm((prev) => ({ ...prev, note: e.target.value }))}
+                                className="block w-full rounded-xl border border-gray-300 py-2.5 px-3 text-sm dark:bg-gray-800"
+                              />
+                            </div>
+                            <div className="flex space-x-3">
+                              <button onClick={() => setAdjustingId(null)} className="w-full rounded-xl border border-gray-300 py-2.5 px-3 text-sm font-medium">Cancel</button>
+                              <button onClick={() => handleAdjust(item.productId)} className="w-full rounded-xl bg-brand-600 py-2.5 px-3 text-sm font-medium text-white">Confirm</button>
                             </div>
                           </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))
-              )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
             </tbody>
           </table>
         </div>
