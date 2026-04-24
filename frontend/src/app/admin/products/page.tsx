@@ -2,7 +2,6 @@
 
 import React, { FormEvent, useEffect, useState, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
-import { getActiveMerchant } from "@/lib/auth";
 
 type Category = {
   id: string;
@@ -26,10 +25,28 @@ type Product = {
   unit: Unit | null;
 };
 
-export default function ProductsPage() {
-  const merchant = getActiveMerchant();
-  const [isMounted, setIsMounted] = useState(false);
+type InputProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+};
 
+type SelectOption = {
+  label: string;
+  value: string;
+};
+
+type SelectProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+};
+
+export default function ProductsPage() {
   const [items, setItems] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -68,15 +85,15 @@ export default function ProductsPage() {
       setItems(productRes.data || []);
       setCategories(categoryRes.data || []);
       setUnits(unitRes.data || []);
-    } catch (err: any) {
-      setError(err.message || "Gagal memuat data produk");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Gagal memuat data produk";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    setIsMounted(true);
     loadAll();
   }, []);
 
@@ -135,8 +152,9 @@ export default function ProductsPage() {
       setShowModal(false);
       setTimeout(() => setSuccess(""), 3000);
       await loadAll();
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan saat menyimpan produk");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Terjadi kesalahan saat menyimpan produk";
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -155,8 +173,9 @@ export default function ProductsPage() {
       setSuccess(`Status produk ${product.name} diperbarui!`);
       setTimeout(() => setSuccess(""), 3000);
       await loadAll();
-    } catch (err: any) {
-      setError(err.message || "Gagal mengubah status produk");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Gagal mengubah status produk";
+      setError(errorMessage);
     }
   }
 
@@ -319,7 +338,7 @@ export default function ProductsPage() {
 
       {/* Modal / Drawer for Product Form */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
            <div className="relative w-full max-w-xl rounded-[40px] bg-white p-8 shadow-2xl dark:bg-gray-900 animate-fade-in-up">
               <div className="mb-8 flex items-center justify-between">
                  <div>
@@ -346,6 +365,7 @@ export default function ProductsPage() {
                     </div>
                     <div>
                        <Select label="Kategori" value={form.categoryId} onChange={(v: string) => setForm(f => ({...f, categoryId: v}))} options={categories.map(c => ({label: c.name, value: c.id}))} />
+                    </div>
                     <div>
                        <Select label="Satuan (Unit)" value={form.unitId} onChange={(v: string) => setForm(f => ({...f, unitId: v}))} options={units.map(u => ({label: u.name, value: u.id}))} />
                     </div>
@@ -357,14 +377,13 @@ export default function ProductsPage() {
                           <Input label="Stok Awal" type="number" value={form.initialStock} onChange={(v: string) => setForm(f => ({...f, initialStock: v}))} placeholder="0" />
                        </div>
                     )}
-                    </div>
                  </div>
 
                  {error && <div className="rounded-2xl bg-rose-50 p-4 text-xs font-bold text-rose-500 border border-rose-100">{error}</div>}
 
                  <div className="flex items-center gap-3 pt-4">
                     <button type="button" onClick={() => setShowModal(false)} className="flex-1 rounded-2xl border border-gray-100 bg-gray-50 py-4 text-sm font-black text-gray-500 hover:bg-gray-100 transition">Batal</button>
-                    <button type="submit" disabled={submitting} className="flex-[2] rounded-2xl bg-brand-500 py-4 text-sm font-black text-white hover:bg-brand-600 shadow-lg shadow-brand-500/20 active:scale-95 transition">
+                    <button type="submit" disabled={submitting} className="flex-2 rounded-2xl bg-brand-500 py-4 text-sm font-black text-white hover:bg-brand-600 shadow-lg shadow-brand-500/20 active:scale-95 transition">
                        {submitting ? "Memproses..." : editingProduct ? "Simpan Perubahan" : "Tambahkan Sekarang"}
                     </button>
                  </div>
@@ -384,7 +403,7 @@ export default function ProductsPage() {
   );
 }
 
-function Input({ label, value, onChange, placeholder, type = "text", required }: any) {
+function Input({ label, value, onChange, placeholder, type = "text", required }: InputProps) {
   return (
     <div>
       <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400">
@@ -402,7 +421,7 @@ function Input({ label, value, onChange, placeholder, type = "text", required }:
   );
 }
 
-function Select({ label, value, onChange, options }: any) {
+function Select({ label, value, onChange, options }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -415,8 +434,8 @@ function Select({ label, value, onChange, options }: any) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filtered = options.filter((o: any) => o.label.toLowerCase().includes(query.toLowerCase()));
-  const selected = options.find((o: any) => o.value === value);
+  const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()));
+  const selected = options.find((o) => o.value === value);
 
   return (
     <div ref={wrapperRef} className="w-full">
@@ -446,7 +465,7 @@ function Select({ label, value, onChange, options }: any) {
             />
             <ul className="max-h-48 overflow-y-auto">
               <li onClick={() => { onChange(""); setIsOpen(false); }} className="cursor-pointer rounded-xl px-4 py-2 text-xs text-gray-400 hover:bg-gray-50">-- Kosongkan --</li>
-              {filtered.map((o: any) => (
+              {filtered.map((o) => (
                 <li
                   key={o.value}
                   className={`cursor-pointer rounded-xl px-4 py-2 text-xs font-bold transition ${value === o.value ? "bg-brand-50 text-brand-600" : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"}`}
