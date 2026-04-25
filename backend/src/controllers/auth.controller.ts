@@ -18,7 +18,9 @@ type UserWithMerchantUsers = Prisma.UserGetPayload<{
   };
 }>;
 
-// VALIDASI REGISTER (8 Karakter, Huruf Besar, Kecil, & Angka)
+// --- VALIDASI SCHEMAS ---
+
+// VALIDASI REGISTER (Dengan Konfirmasi Password)
 const registerSchema = z.object({
   name: z.string().min(3, 'Nama minimal 3 karakter'),
   email: z.string().email('Email tidak valid'),
@@ -28,6 +30,10 @@ const registerSchema = z.object({
     .regex(/[A-Z]/, 'Password harus mengandung minimal satu huruf besar')
     .regex(/[a-z]/, 'Password harus mengandung minimal satu huruf kecil')
     .regex(/[0-9]/, 'Password harus mengandung minimal satu angka'),
+  confirmPassword: z.string().min(1, 'Konfirmasi password harus diisi'),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Konfirmasi password tidak cocok",
+  path: ["confirmPassword"], 
 });
 
 const loginSchema = z.object({
@@ -39,6 +45,22 @@ const forgotPasswordSchema = z.object({
   email: z.string().email('Email tidak valid'),
 });
 
+// VALIDASI RESET PASSWORD (Dengan Konfirmasi Password)
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Token tidak valid'),
+  newPassword: z
+    .string()
+    .min(8, 'Password minimal 8 karakter')
+    .regex(/[A-Z]/, 'Password harus mengandung huruf besar')
+    .regex(/[a-z]/, 'Password harus mengandung huruf kecil')
+    .regex(/[0-9]/, 'Password harus mengandung angka'),
+  confirmPassword: z.string().min(1, 'Konfirmasi password harus diisi'),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Konfirmasi password tidak cocok",
+  path: ["confirmPassword"],
+});
+
+// --- EMAIL CONFIG ---
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 465,
@@ -49,16 +71,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// VALIDASI RESET PASSWORD (Kriteria sama dengan Register)
-const resetPasswordSchema = z.object({
-  token: z.string().min(1, 'Token tidak valid'),
-  newPassword: z
-    .string()
-    .min(8, 'Password minimal 8 karakter')
-    .regex(/[A-Z]/, 'Password harus mengandung huruf besar')
-    .regex(/[a-z]/, 'Password harus mengandung huruf kecil')
-    .regex(/[0-9]/, 'Password harus mengandung angka'),
-});
+// --- CONTROLLER FUNCTIONS ---
 
 export async function registerOwner(req: Request, res: Response) {
   try {

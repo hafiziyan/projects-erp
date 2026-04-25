@@ -82,6 +82,7 @@ export default function SignUpPage() {
         name: fullName,
         email: form.email,
         password: form.password,
+        confirmPassword: form.confirmPassword,
       });
 
       setSuccess(result.message || "Registrasi berhasil");
