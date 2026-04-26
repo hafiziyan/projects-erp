@@ -1,6 +1,6 @@
 "use client";
 
-import React, { FormEvent, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { getActiveMerchant } from "@/lib/auth";
 
@@ -23,6 +23,7 @@ export default function CategoriesPage() {
     try {
       setLoading(true);
       setError("");
+      // Mengambil semua kategori global
       const result = await api.get<{ success: boolean; data: Category[] }>(
         "/master/categories",
         true
@@ -36,11 +37,8 @@ export default function CategoriesPage() {
   }
 
   useEffect(() => {
-    // 1. Set isMounted jadi true dan ambil data merchant HANYA saat di browser
     setIsMounted(true);
     setMerchant(getActiveMerchant());
-    
-    // 2. Load data kategori dari API
     loadCategories();
   }, []);
 
@@ -119,7 +117,7 @@ export default function CategoriesPage() {
             <button
               onClick={() => handleCreate(search.trim())}
               disabled={submitting}
-              className="block rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+              className="block rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
             >
               {submitting ? "Menyimpan..." : `+ Tambah Kategori "${search.trim()}"`}
             </button>
@@ -147,7 +145,6 @@ export default function CategoriesPage() {
                   <span className="text-sm font-medium text-gray-800 dark:text-white/90">
                     {item.name}
                   </span>
-                  {/* Tombol Delete akan muncul saat hover, (opsional: bisa dihapus jika tidak mau ada delete) */}
                   <button
                     onClick={() => handleDelete(item.id)}
                     className="hidden text-xs text-red-500 hover:text-red-700 group-hover:block"

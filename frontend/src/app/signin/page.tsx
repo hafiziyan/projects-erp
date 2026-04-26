@@ -33,29 +33,33 @@ export default function SignInPage() {
 
     try {
       // 1. Tembak API Login Backend
-      const response = await api.post("/auth/login", form);
+      const response = await api.post<any>("/auth/login", form);
       
-      // --- BAGIAN WAJIB UNTUK MENYIMPAN TOKEN ---
-      // Kita cek tokennya ada di mana (bisa di response.token atau response.data.token)
+      // 2. Simpan Token (Jika backend mengirim token di response json)
       const token = response.token || response.data?.token;
-      
       if (token) {
-        // Simpan ke localStorage dengan nama "token" sesuai dengan yang dicari di api.ts
         localStorage.setItem("token", token);
-        console.log("Login sukses! Token berhasil disimpan."); // Pesan bantuan untuk ngecek di console
-      } else {
-        console.warn("PENTING: Backend membalas sukses, tapi tidak ada token di dalamnya:", response);
       }
-      // ------------------------------------------
 
-      // 2. Jika sukses, baru arahkan ke dashboard
-      router.push("/admin/dashboard");
+      // --- SIMPAN ACTIVE MERCHANT SEBELUM PINDAH HALAMAN ---
+      // Ambil array merchants dari response backend yang tadi kita buat di controller
+      const merchants = response.data?.merchants;
+      
+      // Jika user terdaftar minimal di 1 merchant, simpan yang pertama sebagai merchant aktif
+      if (merchants && merchants.length > 0) {
+        saveActiveMerchant(merchants[0]);
+      }
+      // -----------------------------------------------------
+
+      // 3. Pindah ke dashboard dengan hard-reload
+      // Ini akan memaksa browser me-refresh, sehingga Sidebar langsung membaca 
+      // data merchant/role yang baru saja kita simpan di atas.
+      window.location.href = "/admin/dashboard"; 
+      
     } catch (err: any) {
-      // Tangkap error dari backend
       setError(err.message || "Login gagal. Coba cek kembali email dan password Anda.");
-    } finally {
-      setLoading(false);
-    }
+      setLoading(false); 
+    } 
   }
 
   return (

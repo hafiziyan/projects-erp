@@ -100,7 +100,6 @@ export async function createCategory(req: Request, res: Response) {
       return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Validasi gagal' });
     }
 
-    // mode insensitive dan equals sudah dihapus
     const existingCategory = await prisma.category.findFirst({
       where: {
         name: parsed.data.name
@@ -156,8 +155,8 @@ export async function getCategories(req: Request, res: Response) {
       return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
     }
 
+    // [PERBAIKAN]: where: { merchantId } DIHAPUS agar query menarik data global
     const categories = await prisma.category.findMany({
-      where: { merchantId },
       orderBy: { name: 'asc' },
     });
 
@@ -197,7 +196,6 @@ export async function updateCategory(req: Request, res: Response) {
 
     if (!category) return res.status(404).json({ success: false, message: 'Kategori tidak ditemukan atau Anda tidak memiliki akses untuk mengubahnya' });
 
-    // mode insensitive dan equals sudah dihapus
     const duplicate = await prisma.category.findFirst({
       where: {
         name: parsed.data.name,
@@ -278,7 +276,6 @@ export async function createUnit(req: Request, res: Response) {
     const parsed = createUnitSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Validasi gagal' });
 
-    // mode insensitive dan equals sudah dihapus
     const existingUnit = await prisma.unit.findFirst({
       where: { name: parsed.data.name },
     });
@@ -313,8 +310,8 @@ export async function getUnits(req: Request, res: Response) {
     const merchantId = getMerchantIdFromHeader(req);
     if (!merchantId) return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
 
+    // [PERBAIKAN]: where: { merchantId } DIHAPUS agar query menarik data global
     const units = await prisma.unit.findMany({
-      where: { merchantId },
       orderBy: { name: 'asc' },
     });
 
@@ -349,7 +346,6 @@ export async function updateUnit(req: Request, res: Response) {
 
     if (!unit) return res.status(404).json({ success: false, message: 'Unit tidak ditemukan atau tidak berhak diakses' });
 
-    // mode insensitive dan equals sudah dihapus
     const duplicate = await prisma.unit.findFirst({
       where: {
         name: parsed.data.name,

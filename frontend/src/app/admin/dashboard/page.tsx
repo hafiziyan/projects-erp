@@ -274,15 +274,15 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Link
-            href="/select-merchant"
+          <button
+            onClick={openSelectMerchant}
             className="flex items-center gap-2 rounded-xl bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20 backdrop-blur-md"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
             </svg>
             Switch Shop
-          </Link>
+          </button>
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-brand-600 transition hover:bg-white/90 shadow-lg"

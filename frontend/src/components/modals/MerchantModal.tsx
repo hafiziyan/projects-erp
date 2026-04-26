@@ -3,7 +3,7 @@
 import React, { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { saveActiveMerchant } from "@/lib/auth";
+import { saveActiveMerchant, getActiveMerchant } from "@/lib/auth"; // Import getActiveMerchant
 import { useMerchantModal } from "@/context/MerchantModalContext";
 
 export default function MerchantModal() {
@@ -13,6 +13,7 @@ export default function MerchantModal() {
   // Select State
   const [merchants, setMerchants] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentActiveId, setCurrentActiveId] = useState<string | null>(null);
 
   // Create State
   const [form, setForm] = useState({ name: "", address: "", phone: "" });
@@ -22,6 +23,10 @@ export default function MerchantModal() {
 
   useEffect(() => {
     if (modalType === "select") {
+      // Ambil ID merchant yang sedang aktif dari session
+      const active = getActiveMerchant();
+      if (active) setCurrentActiveId(active.merchantId);
+      
       fetchMerchants();
     } else if (modalType === "create") {
       setError("");
@@ -34,7 +39,7 @@ export default function MerchantModal() {
     try {
       setLoading(true);
       const response = await api.get<any>("/auth/me");
-      setMerchants(response.data?.merchants || []);;
+      setMerchants(response.data?.merchants || []);
     } catch (err) {
       console.error("Gagal mengambil data merchant", err);
     } finally {
@@ -43,9 +48,15 @@ export default function MerchantModal() {
   }
 
   const handleSelect = (merchant: any) => {
+    // Jika memilih merchant yang sama, cukup tutup modal
+    if (merchant.merchantId === currentActiveId) {
+      closeModal();
+      return;
+    }
+    
     saveActiveMerchant(merchant);
     closeModal();
-    window.location.reload(); // Refresh the app context with the new merchant
+    window.location.reload(); 
   };
 
   async function handleCreateSubmit(e: FormEvent) {
@@ -107,27 +118,51 @@ export default function MerchantModal() {
                   Kamu belum memiliki akses ke merchant/toko manapun.
                 </div>
               ) : (
-                merchants.map((item: any) => (
-                  <button
-                    key={item.merchantId}
-                    onClick={() => handleSelect(item)}
-                    className="group flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-gray-50/50 p-4 transition-all hover:border-brand-500 hover:bg-brand-50/30 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:border-brand-400 text-left"
-                  >
-                    <div>
-                      <p className="font-bold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400">
-                        {item.merchantName}
-                      </p>
-                      <span className="inline-block mt-1 rounded bg-gray-200 px-2 py-0.5 text-[10px] font-black uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                        Role: {item.role}
-                      </span>
-                    </div>
-                    <div className="text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                      </svg>
-                    </div>
-                  </button>
-                ))
+                merchants.map((item: any) => {
+                  const isActive = item.merchantId === currentActiveId;
+                  
+                  return (
+                    <button
+                      key={item.merchantId}
+                      onClick={() => handleSelect(item)}
+                      className={`group flex w-full items-center justify-between rounded-2xl border p-4 transition-all text-left ${
+                        isActive 
+                          ? "border-brand-500 bg-brand-50/30 dark:bg-brand-500/10 cursor-default" 
+                          : "border-gray-100 bg-gray-50/50 hover:border-brand-500 hover:bg-brand-50/30 dark:border-gray-800 dark:bg-gray-800/50 dark:hover:border-brand-400"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-black ${
+                          isActive ? "bg-brand-500 text-white" : "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                        }`}>
+                          {item.merchantName.charAt(0)}
+                        </div>
+                        <div>
+                          <p className={`font-bold ${isActive ? "text-brand-600 dark:text-brand-400" : "text-gray-900 dark:text-white"}`}>
+                            {item.merchantName}
+                          </p>
+                          <span className="inline-block mt-1 rounded bg-gray-200 px-2 py-0.5 text-[10px] font-black uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                            Role: {item.role}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Indikator Status Aktif */}
+                      {isActive ? (
+                        <div className="flex items-center gap-2 rounded-full bg-brand-500 px-3 py-1 shadow-sm shadow-brand-500/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+                          <span className="text-[10px] font-black uppercase text-white tracking-wider">Aktif</span>
+                        </div>
+                      ) : (
+                        <div className="text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })
               )}
             </div>
             

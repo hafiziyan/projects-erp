@@ -313,3 +313,84 @@ export async function adjustStock(req: Request, res: Response) {
     });
   }
 }
+
+// --- FUNGSI BARU UNTUK MENGAMBIL HISTORY ---
+export async function getStockHistory(req: Request, res: Response) {
+  try {
+    const merchantId = getMerchantIdFromHeader(req);
+    const productIdRaw = getSingleParam(req.params.productId);
+
+    if (!merchantId || !productIdRaw || !/^\d+$/.test(productIdRaw)) {
+      return res.status(400).json({ success: false, message: 'Data request tidak valid' });
+    }
+
+    const productId = BigInt(productIdRaw);
+
+    // Cari ID Stok
+    const stock = await prisma.stock.findFirst({
+      where: { merchantId, productId },
+    });
+
+    if (!stock) {
+      return res.status(404).json({ success: false, message: 'Stok tidak ditemukan' });
+    }
+
+    // Ambil riwayat dari tabel AuditLog
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        merchantId,
+        entity: 'Stock',
+        entityId: stock.id,
+        action: 'ADJUST_STOCK',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Ambil nama user yang melakukan aksi
+    const userIds = [...new Set(logs.map(l => l.userId))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true },
+    });
+    const userMap = new Map(users.map(u => [u.id.toString(), u.name]));
+
+    const history = logs.map((log) => {
+      // Parsing deskripsi menggunakan Regex untuk menarik data
+      const match = log.description.match(/tipe (add|subtract|set), qty (\d+), hasil akhir (\d+)\.?\s*(.*)/);
+
+      let type = "set";
+      let qty = 0;
+      let currentStock = 0;
+      let note = "-";
+
+      if (match) {
+        type = match[1];
+        qty = parseInt(match[2], 10);
+        currentStock = parseInt(match[3], 10);
+        note = match[4] || "-";
+      }
+
+      let adjustment = type === 'add' ? qty : type === 'subtract' ? -qty : qty;
+      let previousStock = type === 'add' ? currentStock - qty : type === 'subtract' ? currentStock + qty : 0;
+
+      return {
+        id: log.id.toString(),
+        type,
+        adjustment,
+        previousStock,
+        currentStock,
+        note,
+        userName: userMap.get(log.userId.toString()) || "System",
+        createdAt: log.createdAt.toISOString(),
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: history,
+    });
+  } catch (error) {
+    console.error('getStockHistory error:', error);
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
+  }
+}

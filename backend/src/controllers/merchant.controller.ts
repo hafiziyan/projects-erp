@@ -256,7 +256,6 @@ export async function updateMerchant(req: Request, res: Response) {
     const authUser = req.authUser;
     if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-    // Pastikan id adalah string tunggal
     const { id } = req.params;
     const merchantIdStr = Array.isArray(id) ? id[0] : id;
 
@@ -295,6 +294,51 @@ export async function updateMerchant(req: Request, res: Response) {
   }
 }
 
+// --- FUNGSI BARU: TOGGLE STATUS MERCHANT ---
+export async function toggleMerchantStatus(req: Request, res: Response) {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const { id: rawId } = req.params;
+    const idString = Array.isArray(rawId) ? rawId[0] : rawId;
+
+    if (!idString || !/^\d+$/.test(idString)) {
+      return res.status(400).json({ success: false, message: 'ID merchant tidak valid' });
+    }
+
+    const merchantId = BigInt(idString);
+    const userId = BigInt(authUser.userId);
+    const { merchantStatus } = req.body;
+
+    if (!merchantStatus || !['active', 'inactive'].includes(merchantStatus)) {
+      return res.status(400).json({ success: false, message: 'Status tidak valid' });
+    }
+
+    const membership = await prisma.merchantUser.findFirst({
+      where: { merchantId, userId, role: { name: 'Owner' } },
+    });
+
+    if (!membership) {
+      return res.status(403).json({ success: false, message: 'Hanya Owner yang dapat mengubah status merchant' });
+    }
+
+    await prisma.merchant.update({
+      where: { id: merchantId },
+      data: { status: merchantStatus },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Merchant berhasil diubah menjadi ${merchantStatus === 'active' ? 'Aktif' : 'Nonaktif'}`,
+    });
+  } catch (error) {
+    console.error('toggleMerchantStatus error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal mengubah status merchant' });
+  }
+}
+
+// --- FUNGSI DIPERBARUI: MENGHAPUS PERMANEN ---
 export async function deleteMerchant(req: Request, res: Response) {
   try {
     const authUser = req.authUser;
@@ -318,16 +362,20 @@ export async function deleteMerchant(req: Request, res: Response) {
       return res.status(403).json({ success: false, message: 'Hanya Owner yang dapat menghapus merchant' });
     }
 
-    await prisma.merchant.update({
+    // Melakukan Hapus Permanen (Hard Delete)
+    await prisma.merchant.delete({
       where: { id: merchantId },
-      data: { status: 'inactive' },
     });
 
     return res.status(200).json({
       success: true,
-      message: 'Merchant berhasil dinonaktifkan',
+      message: 'Merchant berhasil dihapus secara permanen',
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Gagal menghapus merchant' });
+    console.error('deleteMerchant error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Gagal menghapus merchant. Pastikan tidak ada data yang terikat (Produk/Transaksi) sebelum menghapus toko.' 
+    });
   }
 }
