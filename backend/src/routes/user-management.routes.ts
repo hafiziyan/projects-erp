@@ -1,41 +1,19 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth.middleware';
-import { requireRole } from '../middlewares/role.middleware';
-import {
-  createMerchantUser,
-  deactivateMerchantUser,
-  getMerchantUsers,
-  updateMerchantUserRole,
-} from '../controllers/user-management.controller';
+import * as Ctrl from '../controllers/user-management.controller';
 
 const router = Router();
 
-router.post(
-  '/',
-  authMiddleware,
-  requireRole(['Owner']),
-  createMerchantUser
-);
+// Pastikan di controller nama fungsinya: createMerchantUser
+router.post('/', authMiddleware, Ctrl.createMerchantUser);
 
-router.get(
-  '/',
-  authMiddleware,
-  requireRole(['Owner']),
-  getMerchantUsers
-);
+// Pastikan di controller nama fungsinya: getMerchantUsers
+router.get('/', authMiddleware, Ctrl.getMerchantUsers);
 
-router.patch(
-  '/:id/role',
-  authMiddleware,
-  requireRole(['Owner']),
-  updateMerchantUserRole
-);
+// Pastikan di controller nama fungsinya: updateMerchantUserRole
+router.patch('/:id/role', authMiddleware, Ctrl.updateMerchantUserRole);
 
-router.patch(
-  '/:id/deactivate',
-  authMiddleware,
-  requireRole(['Owner']),
-  deactivateMerchantUser
-);
+// Pastikan di controller nama fungsinya: toggleMerchantUserStatus
+router.patch('/:id/status', authMiddleware, Ctrl.toggleMerchantUserStatus);
 
 export default router;
