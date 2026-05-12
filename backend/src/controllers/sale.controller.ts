@@ -9,6 +9,9 @@ const createSaleSchema = z.object({
     z.object({
       productId: z.union([z.string(), z.number()]),
       quantity: z.union([z.string(), z.number()]),
+      productNameSnapshot: z.string().optional(),
+      skuSnapshot: z.string().nullable().optional(),
+      priceSnapshot: z.union([z.string(), z.number()]).optional(),
     })
   ).min(1, 'Minimal ada 1 item penjualan'),
 });
@@ -105,6 +108,9 @@ export async function createSale(req: Request, res: Response) {
       return {
         productId,
         quantity,
+        productNameSnapshot: item.productNameSnapshot,
+        skuSnapshot: item.skuSnapshot ?? null,
+        priceSnapshot: parseNumberValue(item.priceSnapshot),
       };
     });
 
@@ -115,7 +121,7 @@ export async function createSale(req: Request, res: Response) {
       });
     }
 
-    const productIds = normalizedItems.map((item) => BigInt(item.productId as number));
+    const productIds = Array.from(new Set(normalizedItems.map((item) => item.productId as number))).map((productId) => BigInt(productId));
 
     const products = await prisma.product.findMany({
       where: {
@@ -130,7 +136,7 @@ export async function createSale(req: Request, res: Response) {
       },
     });
 
-    if (products.length !== normalizedItems.length) {
+    if (products.length !== productIds.length) {
       return res.status(404).json({
         success: false,
         message: 'Ada produk yang tidak ditemukan atau tidak aktif',
@@ -138,6 +144,22 @@ export async function createSale(req: Request, res: Response) {
     }
 
     let subtotal = 0;
+    const requestedQuantityByProductId = new Map<string, number>();
+
+    for (const item of normalizedItems) {
+      const productId = String(item.productId);
+      requestedQuantityByProductId.set(productId, (requestedQuantityByProductId.get(productId) || 0) + (item.quantity as number));
+    }
+
+    for (const product of products) {
+      const requestedQuantity = requestedQuantityByProductId.get(product.id.toString()) || 0;
+      if (!product.stock) {
+        throw new Error('STOCK_NOT_FOUND');
+      }
+      if (product.stock.actualQuantity < requestedQuantity) {
+        throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
+      }
+    }
 
     const detailedItems = normalizedItems.map((item) => {
       const product = products.find(
@@ -146,14 +168,6 @@ export async function createSale(req: Request, res: Response) {
 
       if (!product) {
         throw new Error('PRODUCT_NOT_FOUND');
-      }
-
-      if (!product.stock) {
-        throw new Error('STOCK_NOT_FOUND');
-      }
-
-      if (product.stock.actualQuantity < (item.quantity as number)) {
-        throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
       }
 
       const price = Number(product.price);
@@ -165,6 +179,8 @@ export async function createSale(req: Request, res: Response) {
         quantity: item.quantity as number,
         price,
         subtotal: itemSubtotal,
+        productNameSnapshot: item.productNameSnapshot || product.name,
+        skuSnapshot: item.skuSnapshot ?? product.sku,
       };
     });
 
@@ -191,7 +207,12 @@ export async function createSale(req: Request, res: Response) {
         },
       });
 
+      const stockQuantityByProductId = new Map<string, number>();
+
       for (const item of detailedItems) {
+        const productId = item.product.id.toString();
+        stockQuantityByProductId.set(productId, (stockQuantityByProductId.get(productId) || 0) + item.quantity);
+
         await tx.saleItem.create({
           data: {
             saleId: sale.id,
@@ -199,16 +220,23 @@ export async function createSale(req: Request, res: Response) {
             quantity: item.quantity,
             price: item.price,
             subtotal: item.subtotal,
+            ...( {
+              productNameSnapshot: item.productNameSnapshot,
+              skuSnapshot: item.skuSnapshot,
+            } as any ),
           },
         });
 
+      }
+
+      for (const [productId, quantity] of stockQuantityByProductId) {
         await tx.stock.update({
           where: {
-            productId: item.product.id,
+            productId: BigInt(productId),
           },
           data: {
             actualQuantity: {
-              decrement: item.quantity,
+              decrement: quantity,
             },
           },
         });
@@ -260,14 +288,22 @@ export async function createSale(req: Request, res: Response) {
             }
           : null,
         items:
-          saleDetail?.items.map((item) => ({
-            saleItemId: item.id.toString(),
-            productId: item.product.id.toString(),
-            productName: item.product.name,
-            quantity: item.quantity,
-            price: Number(item.price),
-            subtotal: Number(item.subtotal),
-          })) ?? [],
+          saleDetail?.items.map((item) => {
+            const snapshotItem = item as typeof item & {
+              productNameSnapshot?: string | null;
+              skuSnapshot?: string | null;
+            };
+
+            return {
+              saleItemId: item.id.toString(),
+              productId: item.product.id.toString(),
+              productName: snapshotItem.productNameSnapshot || item.product.name,
+              sku: snapshotItem.skuSnapshot ?? item.product.sku,
+              quantity: item.quantity,
+              price: Number(item.price),
+              subtotal: Number(item.subtotal),
+            };
+          }) ?? [],
         createdAt: result.createdAt,
       },
     });
@@ -419,14 +455,22 @@ export async function getSaleDetail(req: Request, res: Response) {
               email: sale.cashier.email,
             }
           : null,
-        items: sale.items.map((item) => ({
-          saleItemId: item.id.toString(),
-          productId: item.product.id.toString(),
-          productName: item.product.name,
-          quantity: item.quantity,
-          price: Number(item.price),
-          subtotal: Number(item.subtotal),
-        })),
+        items: sale.items.map((item) => {
+          const snapshotItem = item as typeof item & {
+            productNameSnapshot?: string | null;
+            skuSnapshot?: string | null;
+          };
+
+          return {
+            saleItemId: item.id.toString(),
+            productId: item.product.id.toString(),
+            productName: snapshotItem.productNameSnapshot || item.product.name,
+            sku: snapshotItem.skuSnapshot ?? item.product.sku,
+            quantity: item.quantity,
+            price: Number(item.price),
+            subtotal: Number(item.subtotal),
+          };
+        }),
         createdAt: sale.createdAt,
       },
     });

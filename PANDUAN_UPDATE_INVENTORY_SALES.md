@@ -17,6 +17,21 @@ Jika menjalankan dari root project, pastikan juga dependency root sudah sinkron:
 npm install
 ```
 
+### Backend
+
+Jika database sudah ada, jalankan migration SQL untuk menambahkan kolom snapshot:
+
+```bash
+cd backend
+Get-Content .\migrations\20260512_add_sales_item_snapshots.sql | npx prisma db execute --schema .\prisma\schema.prisma --stdin
+```
+
+Lalu generate Prisma Client:
+
+```bash
+npx prisma generate
+```
+
 > Catatan: Error `Module not found: Can't resolve 'canvg'` biasanya terjadi karena dependency frontend belum di-install ulang setelah update.
 
 ## 2. Menjalankan Aplikasi
@@ -166,7 +181,46 @@ Uang Diterima : Rp 50.000
 Kembalian     : Rp 5.000
 ```
 
-## 7. Troubleshooting
+## 7. Fitur Baru: Snapshot Item Keranjang POS
+
+Lokasi:
+
+```text
+Admin Dashboard > Sales / POS
+```
+
+Perubahan:
+
+- Item yang sudah masuk ke keranjang menyimpan snapshot nama, SKU, dan harga saat ditambahkan.
+- Jika produk di-rename di halaman Products, item lama di keranjang tidak ikut berubah.
+- Produk yang sama setelah rename bisa ditambahkan lagi sebagai baris baru.
+- Kedua item bisa di-checkout bersamaan.
+- Riwayat transaksi menyimpan nama produk saat checkout, tidak mengikuti perubahan nama master produk.
+
+Cara pakai:
+
+1. Buka halaman Sales/POS.
+2. Tambahkan produk `Wipol` ke keranjang.
+3. Buka halaman Products.
+4. Rename produk `Wipol` menjadi `Kacang`.
+5. Kembali ke Sales/POS.
+6. Item lama tetap tampil sebagai `Wipol`.
+7. Tambahkan produk `Kacang` ke keranjang.
+8. Keranjang sekarang punya 2 baris berbeda.
+9. Checkout transaksi.
+10. Riwayat transaksi akan menyimpan nama snapshot yang benar.
+
+Contoh:
+
+```text
+Keranjang:
+- Wipol (snapshot lama) x 2
+- Kacang (produk baru) x 1
+
+Total: 3 item dari 2 baris berbeda
+```
+
+## 8. Troubleshooting
 
 ### Error: Module not found: Can't resolve 'canvg'
 
@@ -211,7 +265,38 @@ Detected additional lockfiles
 
 Aplikasi masih bisa berjalan. Warning ini muncul karena ada `package-lock.json` di root project dan di folder frontend.
 
-## 8. Validasi Setelah Pull
+### Error: Column 'product_name_snapshot' does not exist
+
+Jika backend error saat load dashboard atau sales:
+
+```text
+Invalid `prisma.sale.findMany()` invocation
+column: 'umkm_pos.sales_items.product_name_snapshot'
+```
+
+Solusi:
+
+1. Stop backend dev server.
+2. Jalankan migration SQL:
+
+```bash
+cd backend
+Get-Content .\migrations\20260512_add_sales_item_snapshots.sql | npx prisma db execute --schema .\prisma\schema.prisma --stdin
+```
+
+3. Generate Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+4. Jalankan ulang backend:
+
+```bash
+npm run dev
+```
+
+## 9. Validasi Setelah Pull
 
 Untuk memastikan frontend aman, jalankan:
 

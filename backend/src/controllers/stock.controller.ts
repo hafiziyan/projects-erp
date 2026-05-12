@@ -356,7 +356,8 @@ export async function getStockHistory(req: Request, res: Response) {
 
     const history = logs.map((log) => {
       // Parsing deskripsi menggunakan Regex untuk menarik data
-      const match = log.description.match(/tipe (add|subtract|set), qty (\d+), hasil akhir (\d+)\.?\s*(.*)/);
+      const description = log.description || '';
+      const match = description.match(/tipe (add|subtract|set), qty (\d+), hasil akhir (\d+)\.?\s*(.*)/);
 
       let type = "set";
       let qty = 0;

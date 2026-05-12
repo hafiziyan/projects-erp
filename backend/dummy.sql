@@ -160,6 +160,8 @@ CREATE TABLE `sales_items` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `sale_id` bigint unsigned NOT NULL,
   `product_id` bigint unsigned NOT NULL,
+  `product_name_snapshot` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sku_snapshot` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `quantity` int NOT NULL,
   `price` decimal(15,2) NOT NULL,
   `subtotal` decimal(15,2) NOT NULL,
