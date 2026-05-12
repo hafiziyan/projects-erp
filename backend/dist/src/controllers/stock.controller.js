@@ -1,0 +1,360 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getStocks = getStocks;
+exports.getStockDetail = getStockDetail;
+exports.adjustStock = adjustStock;
+exports.getStockHistory = getStockHistory;
+const zod_1 = require("zod");
+const prisma_1 = require("../lib/prisma");
+const adjustStockSchema = zod_1.z.object({
+    type: zod_1.z.enum(['add', 'subtract', 'set']),
+    quantity: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]),
+    note: zod_1.z.string().optional(),
+});
+function getMerchantIdFromHeader(req) {
+    const merchantIdHeader = req.headers['x-merchant-id'];
+    if (!merchantIdHeader)
+        return null;
+    const merchantIdValue = Array.isArray(merchantIdHeader)
+        ? merchantIdHeader[0]
+        : merchantIdHeader;
+    if (!merchantIdValue)
+        return null;
+    if (!/^\d+$/.test(merchantIdValue))
+        return null;
+    return BigInt(merchantIdValue);
+}
+function getSingleParam(param) {
+    if (!param)
+        return null;
+    return Array.isArray(param) ? param[0] ?? null : param;
+}
+function parseInteger(value) {
+    if (value === undefined || value === null || value === '')
+        return null;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed))
+        return null;
+    return parsed;
+}
+async function getStocks(req, res) {
+    try {
+        const merchantId = getMerchantIdFromHeader(req);
+        if (!merchantId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Header x-merchant-id tidak valid',
+            });
+        }
+        const searchRaw = req.query.search;
+        const lowStockRaw = req.query.lowStock;
+        const search = Array.isArray(searchRaw) ? searchRaw[0] : searchRaw;
+        const lowStock = Array.isArray(lowStockRaw) ? lowStockRaw[0] : lowStockRaw;
+        const stocks = await prisma_1.prisma.stock.findMany({
+            where: {
+                merchantId,
+                product: {
+                    ...(search
+                        ? {
+                            name: {
+                                contains: String(search),
+                            },
+                        }
+                        : {}),
+                },
+            },
+            include: {
+                product: {
+                    include: {
+                        category: true,
+                        unit: true,
+                    },
+                },
+            },
+            orderBy: {
+                productId: 'desc',
+            },
+        });
+        const mapped = stocks.map((item) => ({
+            stockId: item.id.toString(),
+            productId: item.product.id.toString(),
+            productName: item.product.name,
+            sku: item.product.sku,
+            quantity: item.actualQuantity,
+            reservedQuantity: item.reservedQuantity,
+            reorderPoint: item.product.reorderPoint,
+            isLowStock: item.actualQuantity <= item.product.reorderPoint,
+            status: item.product.status,
+            price: Number(item.product.price),
+            category: item.product.category
+                ? {
+                    id: item.product.category.id.toString(),
+                    name: item.product.category.name,
+                }
+                : null,
+            unit: item.product.unit
+                ? {
+                    id: item.product.unit.id.toString(),
+                    name: item.product.unit.name,
+                }
+                : null,
+            updatedAt: item.updatedAt,
+        }));
+        const filtered = lowStock === 'true'
+            ? mapped.filter((item) => item.isLowStock)
+            : mapped;
+        return res.status(200).json({
+            success: true,
+            data: filtered,
+        });
+    }
+    catch (error) {
+        console.error('getStocks error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan server',
+        });
+    }
+}
+async function getStockDetail(req, res) {
+    try {
+        const merchantId = getMerchantIdFromHeader(req);
+        const productIdRaw = getSingleParam(req.params.productId);
+        if (!merchantId || !productIdRaw || !/^\d+$/.test(productIdRaw)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Data request tidak valid',
+            });
+        }
+        const productId = BigInt(productIdRaw);
+        const stock = await prisma_1.prisma.stock.findFirst({
+            where: {
+                merchantId,
+                productId,
+            },
+            include: {
+                product: {
+                    include: {
+                        category: true,
+                        unit: true,
+                    },
+                },
+            },
+        });
+        if (!stock) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stok tidak ditemukan',
+            });
+        }
+        return res.status(200).json({
+            success: true,
+            data: {
+                stockId: stock.id.toString(),
+                productId: stock.product.id.toString(),
+                productName: stock.product.name,
+                sku: stock.product.sku,
+                quantity: stock.actualQuantity,
+                reservedQuantity: stock.reservedQuantity,
+                reorderPoint: stock.product.reorderPoint,
+                isLowStock: stock.actualQuantity <= stock.product.reorderPoint,
+                status: stock.product.status,
+                price: Number(stock.product.price),
+                category: stock.product.category
+                    ? {
+                        id: stock.product.category.id.toString(),
+                        name: stock.product.category.name,
+                    }
+                    : null,
+                unit: stock.product.unit
+                    ? {
+                        id: stock.product.unit.id.toString(),
+                        name: stock.product.unit.name,
+                    }
+                    : null,
+                updatedAt: stock.updatedAt,
+            },
+        });
+    }
+    catch (error) {
+        console.error('getStockDetail error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan server',
+        });
+    }
+}
+async function adjustStock(req, res) {
+    try {
+        const authUser = req.authUser;
+        const merchantId = getMerchantIdFromHeader(req);
+        const productIdRaw = getSingleParam(req.params.productId);
+        if (!authUser) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized',
+            });
+        }
+        if (!merchantId || !productIdRaw || !/^\d+$/.test(productIdRaw)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Data request tidak valid',
+            });
+        }
+        const parsed = adjustStockSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res.status(400).json({
+                success: false,
+                message: parsed.error.issues[0]?.message || 'Validasi gagal',
+            });
+        }
+        const quantity = parseInteger(parsed.data.quantity);
+        if (quantity === null || quantity < 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Quantity tidak valid',
+            });
+        }
+        const productId = BigInt(productIdRaw);
+        const userId = BigInt(authUser.userId);
+        const stock = await prisma_1.prisma.stock.findFirst({
+            where: {
+                merchantId,
+                productId,
+            },
+            include: {
+                product: true,
+            },
+        });
+        if (!stock) {
+            return res.status(404).json({
+                success: false,
+                message: 'Stok produk tidak ditemukan',
+            });
+        }
+        let newQuantity = stock.actualQuantity;
+        if (parsed.data.type === 'add') {
+            newQuantity = stock.actualQuantity + quantity;
+        }
+        else if (parsed.data.type === 'subtract') {
+            newQuantity = stock.actualQuantity - quantity;
+        }
+        else if (parsed.data.type === 'set') {
+            newQuantity = quantity;
+        }
+        if (newQuantity < 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Stok tidak mencukupi untuk dikurangi',
+            });
+        }
+        const updated = await prisma_1.prisma.$transaction(async (tx) => {
+            const updatedStock = await tx.stock.update({
+                where: {
+                    id: stock.id,
+                },
+                data: {
+                    actualQuantity: newQuantity,
+                },
+            });
+            await tx.auditLog.create({
+                data: {
+                    merchantId,
+                    userId,
+                    action: 'ADJUST_STOCK',
+                    entity: 'Stock',
+                    entityId: updatedStock.id,
+                    description: `Stok produk ${stock.product.name} diubah dengan tipe ${parsed.data.type}, qty ${quantity}, hasil akhir ${newQuantity}. ${parsed.data.note || ''}`.trim(),
+                },
+            });
+            return updatedStock;
+        });
+        return res.status(200).json({
+            success: true,
+            message: 'Stok berhasil diperbarui',
+            data: {
+                stockId: updated.id.toString(),
+                productId: stock.product.id.toString(),
+                productName: stock.product.name,
+                previousQuantity: stock.actualQuantity,
+                currentQuantity: updated.actualQuantity,
+            },
+        });
+    }
+    catch (error) {
+        console.error('adjustStock error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan server',
+        });
+    }
+}
+// --- FUNGSI BARU UNTUK MENGAMBIL HISTORY ---
+async function getStockHistory(req, res) {
+    try {
+        const merchantId = getMerchantIdFromHeader(req);
+        const productIdRaw = getSingleParam(req.params.productId);
+        if (!merchantId || !productIdRaw || !/^\d+$/.test(productIdRaw)) {
+            return res.status(400).json({ success: false, message: 'Data request tidak valid' });
+        }
+        const productId = BigInt(productIdRaw);
+        // Cari ID Stok
+        const stock = await prisma_1.prisma.stock.findFirst({
+            where: { merchantId, productId },
+        });
+        if (!stock) {
+            return res.status(404).json({ success: false, message: 'Stok tidak ditemukan' });
+        }
+        // Ambil riwayat dari tabel AuditLog
+        const logs = await prisma_1.prisma.auditLog.findMany({
+            where: {
+                merchantId,
+                entity: 'Stock',
+                entityId: stock.id,
+                action: 'ADJUST_STOCK',
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        // Ambil nama user yang melakukan aksi
+        const userIds = [...new Set(logs.map(l => l.userId))];
+        const users = await prisma_1.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true },
+        });
+        const userMap = new Map(users.map(u => [u.id.toString(), u.name]));
+        const history = logs.map((log) => {
+            // Parsing deskripsi menggunakan Regex untuk menarik data
+            const match = log.description.match(/tipe (add|subtract|set), qty (\d+), hasil akhir (\d+)\.?\s*(.*)/);
+            let type = "set";
+            let qty = 0;
+            let currentStock = 0;
+            let note = "-";
+            if (match) {
+                type = match[1];
+                qty = parseInt(match[2], 10);
+                currentStock = parseInt(match[3], 10);
+                note = match[4] || "-";
+            }
+            let adjustment = type === 'add' ? qty : type === 'subtract' ? -qty : qty;
+            let previousStock = type === 'add' ? currentStock - qty : type === 'subtract' ? currentStock + qty : 0;
+            return {
+                id: log.id.toString(),
+                type,
+                adjustment,
+                previousStock,
+                currentStock,
+                note,
+                userName: userMap.get(log.userId.toString()) || "System",
+                createdAt: log.createdAt.toISOString(),
+            };
+        });
+        return res.status(200).json({
+            success: true,
+            data: history,
+        });
+    }
+    catch (error) {
+        console.error('getStockHistory error:', error);
+        return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
+    }
+}

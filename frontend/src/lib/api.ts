@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
+type ApiErrorWithStatus = Error & { status?: number };
+
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   useMerchant?: boolean;
 };
@@ -46,12 +49,12 @@ export async function apiFetch<T = any>(
 
   if (!response.ok) {
     // Melempar error dengan status agar bisa ditangkap oleh blok catch di page.tsx
-    const error: any = new Error(result?.message || "Terjadi kesalahan");
+    const error = new Error(result?.message || "Terjadi kesalahan") as ApiErrorWithStatus;
     error.status = response.status;
     throw error;
   }
 
-  return result;
+  return result as T;
 }
 
 export const api = {
@@ -60,6 +63,9 @@ export const api = {
 
   post: <T = any>(endpoint: string, body?: unknown, useMerchant = false) =>
     apiFetch<T>(endpoint, { method: "POST", body, useMerchant }),
+
+  put: <T = any>(endpoint: string, body?: unknown, useMerchant = false) =>
+    apiFetch<T>(endpoint, { method: "PUT", body, useMerchant }),
 
   patch: <T = any>(endpoint: string, body?: unknown, useMerchant = false) =>
     apiFetch<T>(endpoint, { method: "PATCH", body, useMerchant }),

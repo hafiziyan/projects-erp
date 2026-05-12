@@ -21,7 +21,6 @@ export default function MerchantsManagementPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: "", address: "", phone: "" });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   
   // --- STATE UNTUK MENYIMPAN ID MERCHANT YANG SEDANG AKTIF ---
   const [currentActiveId, setCurrentActiveId] = useState<string | null>(null);
@@ -38,8 +37,8 @@ export default function MerchantsManagementPage() {
       setLoading(true);
       const res = await api.get<{ data: Merchant[] }>("/merchants/my");
       setMerchants(res.data || []);
-    } catch (err: any) {
-      setError("Gagal memuat daftar merchant");
+    } catch {
+      alert("Gagal memuat daftar merchant");
     } finally {
       setLoading(false);
     }
@@ -62,8 +61,8 @@ export default function MerchantsManagementPage() {
       await api.put(`/merchants/${editingId}`, editForm);
       setEditingId(null);
       await loadMerchants();
-    } catch (err: any) {
-      alert(err.message || "Gagal memperbarui merchant");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Gagal memperbarui merchant");
     } finally {
       setSaving(false);
     }
@@ -80,8 +79,8 @@ export default function MerchantsManagementPage() {
         merchantStatus: isCurrentlyActive ? "inactive" : "active" 
       });
       await loadMerchants();
-    } catch (err: any) {
-      alert(err.message || `Gagal ${actionText} merchant`);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : `Gagal ${actionText} merchant`);
     }
   }
 
@@ -96,8 +95,8 @@ export default function MerchantsManagementPage() {
     try {
       await api.delete(`/merchants/${m.merchantId}`);
       await loadMerchants();
-    } catch (err: any) {
-      alert(err.message || "Gagal menghapus merchant secara permanen");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Gagal menghapus merchant secara permanen");
     }
   }
 
