@@ -36,6 +36,7 @@ type Sale = {
   createdAt: string;
 };
 
+type CartItem = {
   cartLineId: string;
   productId: string;
   productName: string;
