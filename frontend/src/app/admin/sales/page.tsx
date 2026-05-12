@@ -14,6 +14,7 @@ type Product = {
   id: string;
   name: string;
   price: number;
+  sku: string | null;
   stock: number;
   status: string;
   category: Category | null; // Sebelumnya categoryId: string | null
@@ -35,13 +36,18 @@ type Sale = {
   createdAt: string;
 };
 
-type CartItem = {
+  cartLineId: string;
   productId: string;
   productName: string;
   price: number;
   quantity: number;
+  sku: string | null;
   stock: number;
 };
+
+function createCartLineId(product: Product) {
+  return [product.id, product.name, product.sku || "NO-SKU", product.price].join("::");
+}
 
 type SaleItemDetail = {
   id: string;
@@ -104,6 +110,7 @@ export default function SalesPage() {
   
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [discountAmount, setDiscountAmount] = useState(""); 
+  const [cashReceived, setCashReceived] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -175,11 +182,12 @@ export default function SalesPage() {
 
   function addToCart(product: Product) {
     setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id);
+      const lineId = createCartLineId(product);
+      const existing = prev.find((item) => item.cartLineId === lineId);
       if (existing) {
         if (existing.quantity >= product.stock) return prev;
         return prev.map((item) =>
-          item.productId === product.id
+          item.cartLineId === lineId
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
@@ -188,21 +196,23 @@ export default function SalesPage() {
       return [
         ...prev,
         {
+          cartLineId: lineId,
           productId: product.id,
           productName: product.name,
           price: product.price,
           quantity: 1,
+          sku: product.sku,
           stock: product.stock,
         },
       ];
     });
   }
 
-  function updateQty(productId: string, type: "plus" | "minus") {
+  function updateQty(cartLineId: string, type: "plus" | "minus") {
     setCart((prev) =>
       prev
         .map((item) => {
-          if (item.productId !== productId) return item;
+          if (item.cartLineId !== cartLineId) return item;
 
           if (type === "plus" && item.quantity < item.stock) {
             return { ...item, quantity: item.quantity + 1 };
@@ -219,8 +229,10 @@ export default function SalesPage() {
   }
 
   const numericDiscount = Number(discountAmount.replace(/\D/g, "") || 0);
+  const numericCashReceived = Number(cashReceived.replace(/\D/g, "") || 0);
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const total = subtotal - numericDiscount;
+  const total = Math.max(subtotal - numericDiscount, 0);
+  const changeAmount = Math.max(numericCashReceived - total, 0);
 
   async function handleCreateSale(e: FormEvent) {
     e.preventDefault();
@@ -238,6 +250,9 @@ export default function SalesPage() {
           items: cart.map((item) => ({
             productId: Number(item.productId),
             quantity: item.quantity,
+            productNameSnapshot: item.productName,
+            skuSnapshot: item.sku,
+            priceSnapshot: item.price,
           })),
         },
         true
@@ -246,6 +261,7 @@ export default function SalesPage() {
       setCart([]);
       setPaymentMethod("cash");
       setDiscountAmount(""); 
+      setCashReceived("");
       setSuccessMessage("Transaksi Penjualan Berhasil!");
       setTimeout(() => setSuccessMessage(""), 3000);
       await loadData();
@@ -353,7 +369,11 @@ export default function SalesPage() {
   // --- PERBAIKAN LOGIKA FILTER PRODUK ---
   const filteredProducts = useMemo(() => {
     return products.filter((item) => {
-      const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
+      const normalizedSearch = search.trim().toLowerCase();
+      const matchSearch =
+        normalizedSearch.length === 0 ||
+        item.name.toLowerCase().includes(normalizedSearch) ||
+        (item.sku || "").toLowerCase().includes(normalizedSearch);
       // Mengubah pembacaan filter dari item.categoryId menjadi item.category?.id
       const matchCategory = selectedCategory === "all" || String(item.category?.id) === selectedCategory;
       return matchSearch && matchCategory && item.status === "active";
@@ -467,6 +487,9 @@ export default function SalesPage() {
                       <h3 className="ml-1 text-sm font-black text-gray-900 line-clamp-1 dark:text-white">
                         {item.name}
                       </h3>
+                      <p className="ml-1 mt-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                        SKU: {item.sku || "NO-SKU"}
+                      </p>
                       <p className="ml-1 mt-1 text-xs font-bold text-brand-500">
                         {formatCurrency(item.price)}
                       </p>
@@ -500,7 +523,7 @@ export default function SalesPage() {
                     </div>
                   ) : (
                     cart.map((item) => (
-                      <div key={item.productId} className="flex items-center gap-4 group">
+                      <div key={item.cartLineId} className="flex items-center gap-4 group">
                          <div className="h-14 w-14 rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-300">
                              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -508,14 +531,15 @@ export default function SalesPage() {
                          </div>
                          <div className="flex-1 min-w-0">
                             <p className="text-sm font-black text-gray-900 dark:text-white truncate">{item.productName}</p>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">SKU: {item.sku || "NO-SKU"}</p>
                             <p className="text-[11px] font-bold text-gray-400">{formatCurrency(item.price)}</p>
                          </div>
                          <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-2 py-1 dark:bg-white/5 border border-gray-100 dark:border-gray-800">
-                             <button onClick={() => updateQty(item.productId, "minus")} className="text-gray-400 hover:text-brand-500 transition">
+                             <button onClick={() => updateQty(item.cartLineId, "minus")} className="text-gray-400 hover:text-brand-500 transition">
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M20 12H4" /></svg>
                              </button>
                              <span className="text-xs font-black min-w-[15px] text-center dark:text-white">{item.quantity}</span>
-                             <button onClick={() => updateQty(item.productId, "plus")} className="text-gray-400 hover:text-brand-500 transition">
+                             <button onClick={() => updateQty(item.cartLineId, "plus")} className="text-gray-400 hover:text-brand-500 transition">
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M12 4v16m8-8H4" /></svg>
                              </button>
                          </div>
@@ -553,6 +577,21 @@ export default function SalesPage() {
                           />
                        </div>
                     </div>
+                    <div>
+                       <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">Uang Diterima</label>
+                       <div className="relative">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                             <span className="text-gray-500 text-xs font-semibold">Rp</span>
+                          </div>
+                          <input 
+                             type="text"
+                             value={cashReceived}
+                             onChange={(e) => setCashReceived(formatRupiah(e.target.value))}
+                             className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-8 pr-3 text-xs font-bold outline-none dark:bg-gray-800 dark:border-gray-700"
+                             placeholder="0"
+                          />
+                       </div>
+                    </div>
                   </div>
 
                   <div className="space-y-2 pt-2 border-t border-gray-200/50 dark:border-gray-700/50">
@@ -566,7 +605,11 @@ export default function SalesPage() {
                      </div>
                      <div className="flex items-center justify-between text-xl font-black text-gray-900 dark:text-white pt-2">
                         <span>TOTAL</span>
-                        <span>{formatCurrency(Math.max(total, 0))}</span>
+                        <span>{formatCurrency(total)}</span>
+                     </div>
+                     <div className="flex items-center justify-between text-xs font-bold text-emerald-600">
+                        <span>Kembalian</span>
+                        <span>{formatCurrency(changeAmount)}</span>
                      </div>
                   </div>
 

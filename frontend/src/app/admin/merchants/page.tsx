@@ -16,6 +16,8 @@ type Merchant = {
 
 export default function MerchantsManagementPage() {
   const { openCreateMerchant } = useMerchantModal();
+  const activeMerchant = getActiveMerchant();
+  const canCreateMerchant = activeMerchant?.role === "Owner";
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -107,15 +109,17 @@ export default function MerchantsManagementPage() {
           <h1 className="text-3xl font-black text-gray-900 dark:text-white">Daftar Cabang & Toko</h1>
           <p className="text-sm font-bold text-brand-500 uppercase tracking-widest mt-1">Merchant Management</p>
         </div>
-        <button
-          onClick={openCreateMerchant}
-          className="flex items-center gap-2 rounded-2xl bg-brand-500 px-6 py-3 text-sm font-black text-white hover:bg-brand-600 shadow-lg shadow-brand-500/30 transition-all active:scale-[0.98]"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-          </svg>
-          Tambah Cabang Baru
-        </button>
+        {canCreateMerchant && (
+          <button
+            onClick={openCreateMerchant}
+            className="flex items-center gap-2 rounded-2xl bg-brand-500 px-6 py-3 text-sm font-black text-white hover:bg-brand-600 shadow-lg shadow-brand-500/30 transition-all active:scale-[0.98]"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+            </svg>
+            Tambah Cabang Baru
+          </button>
+        )}
       </div>
 
       <div className="rounded-3xl border border-gray-100 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-white/5 overflow-hidden">

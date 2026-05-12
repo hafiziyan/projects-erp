@@ -102,13 +102,20 @@ export default function StocksPage() {
   }, [lowOnly]);
 
   async function handleAdjust(productId: string) {
+    const quantity = Number(adjustForm.quantity);
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setError("Quantity adjustment harus lebih dari 0");
+      return;
+    }
+
     try {
       setError("");
       await api.patch(
         `/stocks/${productId}/adjust`,
         {
           type: adjustForm.type,
-          quantity: Number(adjustForm.quantity),
+          quantity,
           note: adjustForm.note,
         },
         true
@@ -261,7 +268,7 @@ export default function StocksPage() {
                       <td colSpan={5} className="px-6 py-4 border-l-4 border-brand-500">
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 items-end bg-white p-5 rounded-xl border border-gray-200 shadow-sm dark:bg-gray-900 dark:border-gray-700">
                           <div><label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Type</label><select value={adjustForm.type} onChange={(e) => setAdjustForm((prev) => ({ ...prev, type: e.target.value }))} className="block w-full rounded-xl border border-gray-300 py-2.5 px-3 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"><option value="add">Add</option><option value="subtract">Subtract</option><option value="set">Set</option></select></div>
-                          <div><label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Quantity</label><input type="number" min="0" placeholder="0" value={adjustForm.quantity} onChange={(e) => setAdjustForm((prev) => ({ ...prev, quantity: e.target.value }))} className="block w-full rounded-xl border border-gray-300 py-2.5 px-3 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white" /></div>
+                          <div><label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Quantity</label><input type="number" min="1" step="1" placeholder="1" value={adjustForm.quantity} onChange={(e) => setAdjustForm((prev) => ({ ...prev, quantity: e.target.value.replace(/[^0-9]/g, "") }))} className="block w-full rounded-xl border border-gray-300 py-2.5 px-3 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white" /></div>
                           <div><label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Note</label><input type="text" value={adjustForm.note} onChange={(e) => setAdjustForm((prev) => ({ ...prev, note: e.target.value }))} className="block w-full rounded-xl border border-gray-300 py-2.5 px-3 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white" /></div>
                           <div className="flex space-x-3"><button onClick={() => setAdjustingId(null)} className="w-full rounded-xl border border-gray-300 bg-white py-2.5 px-3 text-sm font-medium hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white">Cancel</button><button onClick={() => handleAdjust(item.productId)} className="w-full rounded-xl bg-brand-600 py-2.5 px-3 text-sm font-medium text-white hover:bg-brand-700 transition">Confirm</button></div>
                         </div>

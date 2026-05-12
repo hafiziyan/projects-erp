@@ -18,6 +18,8 @@ export default function MerchantModal() {
   // Create State
   const [form, setForm] = useState({ name: "", address: "", phone: "" });
   const [createLoading, setCreateLoading] = useState(false);
+  const activeMerchant = getActiveMerchant();
+  const canCreateMerchant = activeMerchant?.role === "Owner";
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -61,12 +63,17 @@ export default function MerchantModal() {
 
   async function handleCreateSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!canCreateMerchant) {
+      setError("Hanya Owner yang dapat membuat merchant baru");
+      return;
+    }
+
     setCreateLoading(true);
     setError("");
     setSuccess("");
 
     try {
-      const result = await api.post<any>("/merchants", form);
+      const result = await api.post<any>("/merchants", form, true);
       setSuccess(result.message || "Merchant berhasil dibuat");
       
       saveActiveMerchant({
@@ -166,15 +173,17 @@ export default function MerchantModal() {
               )}
             </div>
             
-            <div className="mt-8 pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-center">
-               <button onClick={openCreateMerchant} className="text-sm font-bold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400">
-                  + Buat Merchant Baru
-               </button>
-            </div>
+            {canCreateMerchant && (
+              <div className="mt-8 pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-center">
+                 <button onClick={openCreateMerchant} className="text-sm font-bold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-400">
+                    + Buat Merchant Baru
+                 </button>
+              </div>
+            )}
           </div>
         )}
 
-        {modalType === "create" && (
+        {modalType === "create" && canCreateMerchant && (
           <div>
             <div className="mb-6">
               <button 
@@ -241,6 +250,21 @@ export default function MerchantModal() {
              </form>
           </div>
          )}
+
+        {modalType === "create" && !canCreateMerchant && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Akses Ditolak</h2>
+            <p className="text-sm text-gray-500">
+              Hanya Owner yang dapat membuat merchant baru. Silakan hubungi Owner untuk menambahkan cabang atau toko.
+            </p>
+            <button
+              onClick={openSelectMerchant}
+              className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-brand-500/30 hover:bg-brand-700 transition-all"
+            >
+              Kembali ke Pilihan Merchant
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
