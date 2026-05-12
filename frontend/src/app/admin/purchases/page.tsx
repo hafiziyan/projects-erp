@@ -8,7 +8,7 @@ import { useSearchParams } from "next/navigation";
 type Product = {
   id: string;
   name: string;
-  price: number;
+  price: number; // Ini adalah harga jual saat ini
   stock: number;
   reorderPoint: number; 
   status: string;
@@ -36,10 +36,12 @@ type PurchaseItemDetail = {
   subtotal: number;
 };
 
+// UPDATE: Tambahkan field salePrice untuk menampung harga jual baru
 type PurchaseItemForm = {
   productId: string;
   quantity: string;
-  cost: string;
+  cost: string; // Harga Beli
+  salePrice: string; // Harga Jual Baru
 };
 
 type ActiveMerchant = {
@@ -60,9 +62,12 @@ export default function PurchasesPage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  
+  // UPDATE: Inisialisasi salePrice di state items
   const [items, setItems] = useState<PurchaseItemForm[]>([
-    { productId: "", quantity: "", cost: "" },
+    { productId: "", quantity: "", cost: "", salePrice: "" },
   ]);
+  
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -100,12 +105,22 @@ export default function PurchasesPage() {
         if (actionParam === "restock_low") {
           const lowStockItems = fetchedProducts.filter((p) => p.stock <= p.reorderPoint);
           if (lowStockItems.length > 0) {
-            setItems(lowStockItems.map((p) => ({ productId: p.id.toString(), quantity: "", cost: "" })));
+            setItems(lowStockItems.map((p) => ({ 
+                productId: p.id.toString(), 
+                quantity: "", 
+                cost: "", 
+                salePrice: p.price.toString() 
+            })));
           }
         } else if (productParam) {
           const targetProduct = fetchedProducts.find((p) => p.id.toString() === productParam);
           if (targetProduct) {
-            setItems([{ productId: targetProduct.id.toString(), quantity: "", cost: "" }]);
+            setItems([{ 
+                productId: targetProduct.id.toString(), 
+                quantity: "", 
+                cost: "", 
+                salePrice: targetProduct.price.toString() 
+            }]);
           }
         }
         
@@ -119,7 +134,6 @@ export default function PurchasesPage() {
     }
   }
 
-  // --- FUNGSI LOAD DETAIL YANG SUDAH DIBUAT KEBAL ERROR ---
   async function loadPurchaseDetail(purchaseId: string) {
     if (expandedId === purchaseId) {
       setExpandedId(null);
@@ -129,20 +143,14 @@ export default function PurchasesPage() {
     try {
       setExpandedId(purchaseId);
       setDetailLoading(true);
-      const res = await api.get<any>(
-        `/purchases/${purchaseId}`,
-        true
-      );
+      const res = await api.get<any>(`/purchases/${purchaseId}`, true);
       
       const rawData = res.data;
       let extractedItems: PurchaseItemDetail[] = [];
 
-      // Cek apakah data langsung berupa array
       if (Array.isArray(rawData)) {
         extractedItems = rawData;
-      } 
-      // Cek apakah data dibungkus dalam object { items: [...] }
-      else if (rawData && Array.isArray(rawData.items)) {
+      } else if (rawData && Array.isArray(rawData.items)) {
         extractedItems = rawData.items.map((item: any) => ({
           id: item.id || Math.random().toString(),
           productId: item.productId || item.product?.id || "",
@@ -156,28 +164,52 @@ export default function PurchasesPage() {
       setDetails(extractedItems);
     } catch (err: any) {
       console.error("Gagal memuat detail purchase", err);
-      setDetails([]); // Set sebagai array kosong agar map tidak crash
+      setDetails([]);
     } finally {
       setDetailLoading(false);
     }
   }
-  // --------------------------------------------------------
 
   useEffect(() => {
     loadData();
   }, [searchParams]);
 
   function addItemRow() {
-    setItems((prev) => [...prev, { productId: "", quantity: "", cost: "" }]);
+    setItems((prev) => [...prev, { productId: "", quantity: "", cost: "", salePrice: "" }]);
   }
 
   function removeItemRow(index: number) {
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // --- LOGIKA AUTO MARKUP 20% ---
   function updateItem(index: number, field: keyof PurchaseItemForm, value: string) {
     setItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+      prev.map((item, i) => {
+        if (i !== index) return item;
+
+        const updatedItem = { ...item, [field]: value };
+
+        // Jika user memilih produk, set default salePrice dari harga saat ini
+        if (field === "productId") {
+          const selectedProd = products.find(p => p.id.toString() === value);
+          if (selectedProd) {
+            updatedItem.salePrice = formatRupiah(selectedProd.price.toString());
+          }
+        }
+
+        // Jika user mengisi harga beli, hitung markup 20% otomatis
+        if (field === "cost") {
+          const rawCost = Number(value.replace(/\D/g, ""));
+          if (rawCost > 0) {
+            const markup = 0.2; // 20% Profit Margin
+            const recommendedSale = Math.ceil((rawCost + (rawCost * markup)) / 500) * 500; // Pembulatan ke 500 terdekat
+            updatedItem.salePrice = formatRupiah(recommendedSale.toString());
+          }
+        }
+
+        return updatedItem;
+      })
     );
   }
 
@@ -196,13 +228,14 @@ export default function PurchasesPage() {
             productId: Number(item.productId),
             quantity: Number(item.quantity),
             cost: Number(item.cost.replace(/\D/g, "")),
+            newSalePrice: Number(item.salePrice.replace(/\D/g, "")), // Kirim harga jual baru ke backend
           })),
         },
         true
       );
 
       setInvoiceNumber("");
-      setItems([{ productId: "", quantity: "", cost: "" }]);
+      setItems([{ productId: "", quantity: "", cost: "", salePrice: "" }]);
       window.history.replaceState(null, '', '/admin/purchases');
       
       await loadData();
@@ -285,29 +318,53 @@ export default function PurchasesPage() {
                     </select>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <input
-                        required
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(index, "quantity", e.target.value)}
-                        placeholder="Quantity"
-                        className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none focus:border-brand-500 dark:bg-gray-900 dark:border-gray-700 dark:text-white"
-                      />
-
-                      <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                          <span className="text-gray-500 sm:text-sm font-semibold">Rp</span>
-                        </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-gray-400">Qty</label>
                         <input
-                          required
-                          type="text"
-                          value={item.cost}
-                          onChange={(e) => updateItem(index, "cost", formatRupiah(e.target.value))}
-                          placeholder="0"
-                          className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-brand-500 dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+                            required
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, "quantity", e.target.value)}
+                            placeholder="Qty"
+                            className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none focus:border-brand-500 dark:bg-gray-900 dark:border-gray-700 dark:text-white"
                         />
                       </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-gray-400">Harga Beli</label>
+                        <div className="relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <span className="text-gray-500 text-xs font-semibold">Rp</span>
+                            </div>
+                            <input
+                            required
+                            type="text"
+                            value={item.cost}
+                            onChange={(e) => updateItem(index, "cost", formatRupiah(e.target.value))}
+                            placeholder="Modal"
+                            className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-8 pr-3 text-sm outline-none focus:border-brand-500 dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+                            />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* FIELD BARU: HARGA JUAL BARU */}
+                    <div className="rounded-lg border border-brand-500/20 bg-brand-50/30 p-2 dark:bg-brand-500/5">
+                        <label className="text-[10px] font-bold uppercase text-brand-600 dark:text-brand-400">Harga Jual Baru (Katalog)</label>
+                        <div className="relative mt-1">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <span className="text-brand-500 text-xs font-semibold">Rp</span>
+                            </div>
+                            <input
+                                required
+                                type="text"
+                                value={item.salePrice}
+                                onChange={(e) => updateItem(index, "salePrice", formatRupiah(e.target.value))}
+                                className="h-10 w-full rounded-lg border border-brand-500/50 bg-white pl-8 pr-3 text-sm font-bold text-brand-700 outline-none focus:ring-1 focus:ring-brand-500 dark:bg-gray-900 dark:text-brand-400"
+                            />
+                        </div>
+                        <p className="mt-1 text-[9px] text-gray-500 italic">*Otomatis markup 20% dari harga beli</p>
                     </div>
 
                     {items.length > 1 && (
@@ -349,7 +406,6 @@ export default function PurchasesPage() {
           </form>
         </div>
 
-        {/* Purchase History Section */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-white/5 xl:col-span-2">
           <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
             Purchase History
@@ -400,7 +456,6 @@ export default function PurchasesPage() {
                     </div>
                   </div>
 
-                  {/* Expandable Detail Table dengan Safety Check */}
                   {expandedId === purchase.purchaseId && (
                     <div className="mx-2 overflow-hidden rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/40 animate-fade-in-up">
                       {detailLoading ? (

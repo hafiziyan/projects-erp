@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 
+// UPDATE: Tambahkan newSalePrice ke dalam skema validasi
 const createPurchaseSchema = z.object({
   invoiceNumber: z.string().optional(),
   items: z
@@ -10,6 +11,7 @@ const createPurchaseSchema = z.object({
         productId: z.union([z.string(), z.number()]),
         quantity: z.union([z.string(), z.number()]),
         cost: z.union([z.string(), z.number()]),
+        newSalePrice: z.union([z.string(), z.number()]).optional(), // Field baru
       })
     )
     .min(1, 'Minimal ada 1 item pembelian'),
@@ -17,16 +19,9 @@ const createPurchaseSchema = z.object({
 
 function getMerchantIdFromHeader(req: Request): bigint | null {
   const merchantIdHeader = req.headers['x-merchant-id'];
-
   if (!merchantIdHeader) return null;
-
-  const merchantIdValue = Array.isArray(merchantIdHeader)
-    ? merchantIdHeader[0]
-    : merchantIdHeader;
-
-  if (!merchantIdValue) return null;
-  if (!/^\d+$/.test(merchantIdValue)) return null;
-
+  const merchantIdValue = Array.isArray(merchantIdHeader) ? merchantIdHeader[0] : merchantIdHeader;
+  if (!merchantIdValue || !/^\d+$/.test(merchantIdValue)) return null;
   return BigInt(merchantIdValue);
 }
 
@@ -58,7 +53,6 @@ function generatePurchaseInvoiceNumber() {
   const mi = String(now.getMinutes()).padStart(2, '0');
   const ss = String(now.getSeconds()).padStart(2, '0');
   const rand = Math.floor(Math.random() * 9000) + 1000;
-
   return `PUR-${yyyy}${mm}${dd}-${hh}${mi}${ss}-${rand}`;
 }
 
@@ -67,22 +61,10 @@ export async function createPurchase(req: Request, res: Response) {
     const authUser = req.authUser;
     const merchantId = getMerchantIdFromHeader(req);
 
-    if (!authUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
-    }
-
-    if (!merchantId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Header x-merchant-id tidak valid',
-      });
-    }
+    if (!authUser) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!merchantId) return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
 
     const parsed = createPurchaseSchema.safeParse(req.body);
-
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
@@ -92,12 +74,14 @@ export async function createPurchase(req: Request, res: Response) {
 
     const userId = BigInt(authUser.userId);
 
+    // Normalisasi data termasuk newSalePrice
     const normalizedItems = parsed.data.items.map((item) => {
       const productId = parseInteger(item.productId);
       const quantity = parseInteger(item.quantity);
       const cost = parseNumberValue(item.cost);
+      const newSalePrice = parseNumberValue(item.newSalePrice);
 
-      return { productId, quantity, cost };
+      return { productId, quantity, cost, newSalePrice };
     });
 
     if (
@@ -110,10 +94,7 @@ export async function createPurchase(req: Request, res: Response) {
           item.cost < 0
       )
     ) {
-      return res.status(400).json({
-        success: false,
-        message: 'Data item pembelian tidak valid',
-      });
+      return res.status(400).json({ success: false, message: 'Data item pembelian tidak valid' });
     }
 
     const productIds = normalizedItems.map((item) => BigInt(item.productId as number));
@@ -121,55 +102,42 @@ export async function createPurchase(req: Request, res: Response) {
     const products = await prisma.product.findMany({
       where: {
         merchantId,
-        id: {
-          in: productIds,
-        },
+        id: { in: productIds },
       },
-      include: {
-        stock: true,
-      },
+      include: { stock: true },
     });
 
     if (products.length !== normalizedItems.length) {
-      return res.status(404).json({
-        success: false,
-        message: 'Ada produk yang tidak ditemukan',
-      });
+      return res.status(404).json({ success: false, message: 'Ada produk yang tidak ditemukan' });
     }
 
     const detailedItems = normalizedItems.map((item) => {
       const product = products.find((p) => p.id.toString() === String(item.productId));
-
-      if (!product) {
-        throw new Error('PRODUCT_NOT_FOUND');
-      }
+      if (!product) throw new Error('PRODUCT_NOT_FOUND');
 
       return {
         product,
         quantity: item.quantity as number,
         cost: item.cost as number,
+        newSalePrice: item.newSalePrice, // Bisa null jika tidak dikirim
         subtotal: (item.quantity as number) * (item.cost as number),
       };
     });
 
     const totalAmount = detailedItems.reduce((sum, item) => sum + item.subtotal, 0);
-
     const invoiceNumber =
       parsed.data.invoiceNumber && parsed.data.invoiceNumber.trim() !== ''
         ? parsed.data.invoiceNumber.trim()
         : generatePurchaseInvoiceNumber();
 
+    // PROSES TRANSAKSI
     const result = await prisma.$transaction(async (tx) => {
       const purchase = await tx.purchase.create({
-        data: {
-          merchantId,
-          userId,
-          invoiceNumber,
-          totalAmount,
-        },
+        data: { merchantId, userId, invoiceNumber, totalAmount },
       });
 
       for (const item of detailedItems) {
+        // 1. Simpan Item Pembelian
         await tx.purchaseItem.create({
           data: {
             purchaseId: purchase.id,
@@ -180,24 +148,23 @@ export async function createPurchase(req: Request, res: Response) {
           },
         });
 
+        // 2. Update Stok
         if (item.product.stock) {
           await tx.stock.update({
-            where: {
-              id: item.product.stock.id,
-            },
-            data: {
-              actualQuantity: {
-                increment: item.quantity,
-              },
-            },
+            where: { id: item.product.stock.id },
+            data: { actualQuantity: { increment: item.quantity } },
           });
         } else {
           await tx.stock.create({
-            data: {
-              merchantId,
-              productId: item.product.id,
-              actualQuantity: item.quantity,
-            },
+            data: { merchantId, productId: item.product.id, actualQuantity: item.quantity },
+          });
+        }
+
+        // 3. LOGIKA BARU: Update Harga Jual di Katalog Produk
+        if (item.newSalePrice && item.newSalePrice > 0) {
+          await tx.product.update({
+            where: { id: item.product.id },
+            data: { price: item.newSalePrice },
           });
         }
       }
@@ -209,30 +176,25 @@ export async function createPurchase(req: Request, res: Response) {
           action: 'CREATE_PURCHASE',
           entity: 'Purchase',
           entityId: purchase.id,
-          description: `Pembelian ${purchase.invoiceNumber || '-'} berhasil dibuat dengan total ${totalAmount}`,
+          description: `Pembelian ${invoiceNumber} berhasil. Stok dan Harga Jual diperbarui.`,
         },
       });
 
       return purchase;
     });
 
+    // Ambil detail untuk response
     const purchaseDetail = await prisma.purchase.findUnique({
-      where: {
-        id: result.id,
-      },
+      where: { id: result.id },
       include: {
         user: true,
-        items: {
-          include: {
-            product: true,
-          },
-        },
+        items: { include: { product: true } },
       },
     });
 
     return res.status(201).json({
       success: true,
-      message: 'Pembelian berhasil dibuat',
+      message: 'Pembelian berhasil dibuat dan harga katalog diperbarui',
       data: {
         purchaseId: result.id.toString(),
         invoiceNumber: result.invoiceNumber,
@@ -244,44 +206,30 @@ export async function createPurchase(req: Request, res: Response) {
               email: purchaseDetail.user.email,
             }
           : null,
-        items:
-          purchaseDetail?.items.map((item) => ({
-            purchaseItemId: item.id.toString(),
-            productId: item.product.id.toString(),
-            productName: item.product.name,
-            quantity: item.quantity,
-            cost: Number(item.cost),
-            subtotal: Number(item.subtotal),
-          })) ?? [],
+        items: purchaseDetail?.items.map((item) => ({
+          purchaseItemId: item.id.toString(),
+          productId: item.product.id.toString(),
+          productName: item.product.name,
+          quantity: item.quantity,
+          cost: Number(item.cost),
+          subtotal: Number(item.subtotal),
+        })) ?? [],
         createdAt: result.createdAt,
       },
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'PRODUCT_NOT_FOUND') {
-      return res.status(404).json({
-        success: false,
-        message: 'Produk tidak ditemukan',
-      });
+      return res.status(404).json({ success: false, message: 'Produk tidak ditemukan' });
     }
-
     console.error('createPurchase error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
 
 export async function getPurchases(req: Request, res: Response) {
   try {
     const merchantId = getMerchantIdFromHeader(req);
-
-    if (!merchantId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Header x-merchant-id tidak valid',
-      });
-    }
+    if (!merchantId) return res.status(400).json({ success: false, message: 'Header x-merchant-id tidak valid' });
 
     const searchRaw = req.query.search;
     const search = Array.isArray(searchRaw) ? searchRaw[0] : searchRaw;
@@ -289,21 +237,10 @@ export async function getPurchases(req: Request, res: Response) {
     const purchases = await prisma.purchase.findMany({
       where: {
         merchantId,
-        ...(search
-          ? {
-              invoiceNumber: {
-                contains: String(search),
-              },
-            }
-          : {}),
+        ...(search ? { invoiceNumber: { contains: String(search) } } : {}),
       },
-      include: {
-        user: true,
-        items: true,
-      },
-      orderBy: {
-        id: 'desc',
-      },
+      include: { user: true, items: true },
+      orderBy: { id: 'desc' },
     });
 
     return res.status(200).json({
@@ -313,22 +250,17 @@ export async function getPurchases(req: Request, res: Response) {
         invoiceNumber: item.invoiceNumber,
         totalAmount: Number(item.totalAmount),
         totalItems: item.items.length,
-        user: item.user
-          ? {
-              id: item.user.id.toString(),
-              name: item.user.name,
-              email: item.user.email,
-            }
-          : null,
+        user: item.user ? {
+          id: item.user.id.toString(),
+          name: item.user.name,
+          email: item.user.email,
+        } : null,
         createdAt: item.createdAt,
       })),
     });
   } catch (error) {
     console.error('getPurchases error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
 
@@ -338,35 +270,19 @@ export async function getPurchaseDetail(req: Request, res: Response) {
     const purchaseIdRaw = getSingleParam(req.params.id);
 
     if (!merchantId || !purchaseIdRaw || !/^\d+$/.test(purchaseIdRaw)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Data request tidak valid',
-      });
+      return res.status(400).json({ success: false, message: 'Data request tidak valid' });
     }
 
     const purchaseId = BigInt(purchaseIdRaw);
-
     const purchase = await prisma.purchase.findFirst({
-      where: {
-        id: purchaseId,
-        merchantId,
-      },
+      where: { id: purchaseId, merchantId },
       include: {
         user: true,
-        items: {
-          include: {
-            product: true,
-          },
-        },
+        items: { include: { product: true } },
       },
     });
 
-    if (!purchase) {
-      return res.status(404).json({
-        success: false,
-        message: 'Data pembelian tidak ditemukan',
-      });
-    }
+    if (!purchase) return res.status(404).json({ success: false, message: 'Data pembelian tidak ditemukan' });
 
     return res.status(200).json({
       success: true,
@@ -374,13 +290,11 @@ export async function getPurchaseDetail(req: Request, res: Response) {
         purchaseId: purchase.id.toString(),
         invoiceNumber: purchase.invoiceNumber,
         totalAmount: Number(purchase.totalAmount),
-        user: purchase.user
-          ? {
-              id: purchase.user.id.toString(),
-              name: purchase.user.name,
-              email: purchase.user.email,
-            }
-          : null,
+        user: purchase.user ? {
+          id: purchase.user.id.toString(),
+          name: purchase.user.name,
+          email: purchase.user.email,
+        } : null,
         items: purchase.items.map((item) => ({
           purchaseItemId: item.id.toString(),
           productId: item.product.id.toString(),
@@ -394,9 +308,6 @@ export async function getPurchaseDetail(req: Request, res: Response) {
     });
   } catch (error) {
     console.error('getPurchaseDetail error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Terjadi kesalahan server',
-    });
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 }
