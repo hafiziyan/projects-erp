@@ -226,7 +226,6 @@ export async function forgotPassword(req: Request, res: Response) {
     await transporter.sendMail(mailOptions);
     return res.status(200).json({ success: true, message: 'Instruksi reset telah dikirim.' });
   } catch (error) {
-    console.error('DETAIL ERROR EMAIL:', error); // <-- TAMBAHKAN BARIS INI
     return res.status(500).json({ success: false, message: 'Gagal mengirim email reset' });
   }
 }
