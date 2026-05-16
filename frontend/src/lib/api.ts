@@ -72,4 +72,39 @@ export const api = {
 
   delete: <T = any>(endpoint: string, useMerchant = false) =>
     apiFetch<T>(endpoint, { method: "DELETE", useMerchant }),
+
+  postFormData: async <T = any>(endpoint: string, formData: FormData, useMerchant = false): Promise<T> => {
+    const headers: Record<string, string> = {};
+
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("token");
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      if (useMerchant) {
+        const merchantId = localStorage.getItem("merchantId");
+        if (merchantId) {
+          headers["x-merchant-id"] = merchantId;
+        }
+      }
+    }
+
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      const error = new Error(result?.message || "Terjadi kesalahan") as ApiErrorWithStatus;
+      error.status = response.status;
+      throw error;
+    }
+
+    return result as T;
+  },
 };

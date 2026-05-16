@@ -89,6 +89,7 @@ export async function getStocks(req: Request, res: Response) {
       isLowStock: item.actualQuantity <= item.product.reorderPoint,
       status: item.product.status,
       price: Number(item.product.price),
+      imageUrl: item.product.imageUrl,
       category: item.product.category
         ? {
             id: item.product.category.id.toString(),
@@ -171,6 +172,7 @@ export async function getStockDetail(req: Request, res: Response) {
         isLowStock: stock.actualQuantity <= stock.product.reorderPoint,
         status: stock.product.status,
         price: Number(stock.product.price),
+        imageUrl: stock.product.imageUrl,
         category: stock.product.category
           ? {
               id: stock.product.category.id.toString(),

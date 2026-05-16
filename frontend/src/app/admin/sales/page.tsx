@@ -18,6 +18,7 @@ type Product = {
   stock: number;
   status: string;
   category: Category | null; // Sebelumnya categoryId: string | null
+  imageUrl: string | null;
 };
 
 type Sale = {
@@ -383,7 +384,7 @@ export default function SalesPage() {
   // --------------------------------------
 
   return (
-    <div className="space-y-6 flex flex-col h-[calc(100vh-140px)]">
+    <div className="space-y-6 flex flex-col h-[calc(100vh-140px)] pb-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between px-2">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-gray-900 dark:text-white">
@@ -467,35 +468,45 @@ export default function SalesPage() {
                     <p className="font-bold text-xl uppercase tracking-widest">Produk Tidak Ditemukan</p>
                  </div>
                ) : (
-                 <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pb-4">
                    {filteredProducts.map((item) => (
                     <button
                       key={item.id}
                       disabled={item.stock <= 0}
                       onClick={() => addToCart(item)}
-                      className="group relative flex flex-col text-left rounded-3xl border border-gray-100 bg-white p-3 shadow-theme-sm transition hover:scale-[1.02] hover:shadow-xl dark:border-gray-800 dark:bg-white/5 disabled:opacity-50 disabled:grayscale disabled:scale-100"
+                      className="group relative flex flex-col text-left rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl hover:border-brand-200 dark:border-gray-800 dark:bg-white/5 dark:hover:border-brand-500/50 disabled:opacity-50 disabled:grayscale disabled:hover:scale-100 disabled:cursor-not-allowed"
                     >
-                      <div className="aspect-square w-full rounded-2xl bg-gray-50 overflow-hidden dark:bg-white/5 mb-4 relative">
-                          <div className="absolute inset-0 flex items-center justify-center text-gray-300">
-                             <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                             </svg>
-                          </div>
-                          <div className="absolute top-2 right-2 rounded-lg bg-white/80 backdrop-blur px-2 py-1 text-[10px] font-black text-gray-900 border border-white/50">
+                      <div className="aspect-square w-full rounded-xl bg-gray-50 overflow-hidden dark:bg-white/5 mb-3 relative">
+                          {item.imageUrl ? (
+                            <img 
+                              src={`http://localhost:5000${item.imageUrl}`} 
+                              alt={item.name}
+                              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-300">
+                               <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                               </svg>
+                            </div>
+                          )}
+                          <div className="absolute top-2 right-2 rounded-lg bg-white/90 backdrop-blur-sm px-2.5 py-1 text-[10px] font-black text-gray-900 shadow-sm">
                              Stok: {item.stock}
                           </div>
                       </div>
-                      <h3 className="ml-1 text-sm font-black text-gray-900 line-clamp-1 dark:text-white">
-                        {item.name}
-                      </h3>
-                      <p className="ml-1 mt-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400">
-                        SKU: {item.sku || "NO-SKU"}
-                      </p>
-                      <p className="ml-1 mt-1 text-xs font-bold text-brand-500">
-                        {formatCurrency(item.price)}
-                      </p>
+                      <div className="flex-1 flex flex-col">
+                        <h3 className="text-sm font-black text-gray-900 line-clamp-2 leading-tight dark:text-white mb-1">
+                          {item.name}
+                        </h3>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                          SKU: {item.sku || "NO-SKU"}
+                        </p>
+                        <p className="text-sm font-black text-brand-600 dark:text-brand-400 mt-auto">
+                          {formatCurrency(item.price)}
+                        </p>
+                      </div>
                       
-                      <div className="absolute bottom-3 right-3 h-8 w-8 rounded-full bg-brand-500 flex items-center justify-center text-white scale-0 group-hover:scale-100 transition shadow-lg shadow-brand-500/30">
+                      <div className="absolute bottom-4 right-4 h-10 w-10 rounded-full bg-brand-500 flex items-center justify-center text-white opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 shadow-lg shadow-brand-500/50 group-disabled:hidden">
                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
                          </svg>

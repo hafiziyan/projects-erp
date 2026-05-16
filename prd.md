@@ -155,6 +155,7 @@ Sistem ini adalah **POS berbasis cloud dengan manajemen inventori multi-cabang**
 | POS-02 | Stok produk berkurang secara real-time setelah transaksi selesai | Jika stok tidak mencukupi (actual stock - reserved stock < quantity), transaksi ditolak. |
 | POS-03 | Transaksi dapat dilakukan secara offline, disimpan di IndexedDB, dan di-sync saat online | Saat sync, jika terjadi konflik (stok sudah berubah di server), gunakan aturan: transaksi offline tetap berlaku, server mengurangi stok dengan selisih. Jika stok server negatif, transaksi ditandai sebagai "konflik" dan perlu konfirmasi owner. |
 | POS-04 | Kasir dapat membatalkan transaksi | Stok yang sudah terpakai dikembalikan. Log pembatalan tercatat. |
+| POS-05 | Produk ditampilkan dengan gambar visual di katalog POS | Jika produk memiliki gambar, tampilkan gambar dengan zoom effect saat hover. Jika tidak ada gambar, tampilkan placeholder icon. Gambar dimuat dari server dengan lazy loading. |
 
 ### 7.3 Inventory & Stok
 
@@ -164,6 +165,7 @@ Sistem ini adalah **POS berbasis cloud dengan manajemen inventori multi-cabang**
 | INV-02 | Sistem mencatat setiap mutasi stok (transaksi, transfer, opname, adjustment) dengan timestamp, user, dan alasan | Tabel `stock_mutation_log` wajib. Tidak boleh ada perubahan stok tanpa log. |
 | INV-03 | Owner dapat melakukan stock opname per cabang dengan mekanisme: freeze stok sementara, hitung fisik, input selisih, approve adjustment | Saat freeze, transaksi tetap berjalan tapi stok tidak berubah (menggunakan nilai frozen). Setelah adjustment, selisih dicatat sebagai "adjustment". |
 | INV-04 | Peringatan stok minimum: jika `available_quantity` <= `min_stock`, muncul notifikasi di dashboard cabang dan owner | Notifikasi bisa berupa badge merah. Pengaturan min_stock per produk per cabang. |
+| INV-05 | Owner dapat mengunggah gambar produk (max 5MB, format JPG/PNG) saat membuat atau mengedit produk | Gambar disimpan di server dengan path `/uploads/products/`. Produk tanpa gambar menggunakan placeholder. Preview gambar ditampilkan sebelum upload. |
 
 ### 7.4 Request & Transfer Barang (Distribusi)
 
@@ -227,6 +229,7 @@ Berikut adalah **atribut minimal** untuk setiap entitas (tipe data PostgreSQL).
 | category_id | UUID FK |
 | unit | VARCHAR(20) |
 | default_price | DECIMAL(12,2) |
+| image_url | VARCHAR(500) NULLABLE |
 | is_active | BOOLEAN |
 
 ### 9.3 `branch_products` (harga & stok per cabang)

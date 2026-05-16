@@ -302,6 +302,7 @@ export async function createSale(req: Request, res: Response) {
               quantity: item.quantity,
               price: Number(item.price),
               subtotal: Number(item.subtotal),
+              imageUrl: item.product.imageUrl,
             };
           }) ?? [],
         createdAt: result.createdAt,
@@ -469,6 +470,7 @@ export async function getSaleDetail(req: Request, res: Response) {
             quantity: item.quantity,
             price: Number(item.price),
             subtotal: Number(item.subtotal),
+            imageUrl: item.product.imageUrl,
           };
         }),
         createdAt: sale.createdAt,

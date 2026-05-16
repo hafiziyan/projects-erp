@@ -23,6 +23,8 @@ const createMerchantSchema = zod_1.z.object({
 async function createMerchant(req, res) {
     try {
         const authUser = req.authUser;
+        const activeMerchantIdHeader = req.headers['x-merchant-id'];
+        const activeMerchantIdRaw = Array.isArray(activeMerchantIdHeader) ? activeMerchantIdHeader[0] : activeMerchantIdHeader;
         if (!authUser) {
             return res.status(401).json({
                 success: false,
@@ -49,6 +51,24 @@ async function createMerchant(req, res) {
             });
         }
         const userId = BigInt(authUser.userId);
+        if (activeMerchantIdRaw && /^\d+$/.test(activeMerchantIdRaw)) {
+            const activeMembership = await prisma_1.prisma.merchantUser.findFirst({
+                where: {
+                    userId,
+                    merchantId: BigInt(activeMerchantIdRaw),
+                    status: 'active',
+                },
+                include: {
+                    role: true,
+                },
+            });
+            if (activeMembership && activeMembership.role.name !== 'Owner') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Hanya Owner yang dapat membuat merchant baru',
+                });
+            }
+        }
         const result = await prisma_1.prisma.$transaction(async (tx) => {
             const merchant = await tx.merchant.create({
                 data: {

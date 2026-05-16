@@ -86,6 +86,7 @@ async function getStocks(req, res) {
             isLowStock: item.actualQuantity <= item.product.reorderPoint,
             status: item.product.status,
             price: Number(item.product.price),
+            imageUrl: item.product.imageUrl,
             category: item.product.category
                 ? {
                     id: item.product.category.id.toString(),
@@ -160,6 +161,7 @@ async function getStockDetail(req, res) {
                 isLowStock: stock.actualQuantity <= stock.product.reorderPoint,
                 status: stock.product.status,
                 price: Number(stock.product.price),
+                imageUrl: stock.product.imageUrl,
                 category: stock.product.category
                     ? {
                         id: stock.product.category.id.toString(),
@@ -324,7 +326,8 @@ async function getStockHistory(req, res) {
         const userMap = new Map(users.map(u => [u.id.toString(), u.name]));
         const history = logs.map((log) => {
             // Parsing deskripsi menggunakan Regex untuk menarik data
-            const match = log.description.match(/tipe (add|subtract|set), qty (\d+), hasil akhir (\d+)\.?\s*(.*)/);
+            const description = log.description || '';
+            const match = description.match(/tipe (add|subtract|set), qty (\d+), hasil akhir (\d+)\.?\s*(.*)/);
             let type = "set";
             let qty = 0;
             let currentStock = 0;

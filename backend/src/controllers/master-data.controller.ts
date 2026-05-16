@@ -26,6 +26,7 @@ const createProductSchema = z.object({
   price: z.union([z.string(), z.number()]),
   reorderPoint: z.union([z.string(), z.number()]).optional(),
   initialStock: z.union([z.string(), z.number()]).optional(),
+  imageUrl: z.string().optional(),
 });
 
 const updateProductSchema = z.object({
@@ -36,6 +37,7 @@ const updateProductSchema = z.object({
   price: z.union([z.string(), z.number()]).optional(),
   reorderPoint: z.union([z.string(), z.number()]).optional(),
   status: z.enum(['active', 'inactive']).optional(),
+  imageUrl: z.string().optional(),
 });
 
 function getMerchantIdFromHeader(req: Request): bigint | null {
@@ -534,6 +536,7 @@ export async function createProduct(req: Request, res: Response) {
           price,
           reorderPoint,
           status: 'active',
+          imageUrl: parsed.data.imageUrl || null,
         },
         include: {
           category: true,
@@ -577,6 +580,7 @@ export async function createProduct(req: Request, res: Response) {
         reorderPoint: result.product.reorderPoint,
         status: result.product.status,
         stock: result.stock.actualQuantity,
+        imageUrl: result.product.imageUrl,
         category: result.product.category
           ? {
               id: result.product.category.id.toString(),
@@ -664,6 +668,7 @@ export async function getProducts(req: Request, res: Response) {
         reorderPoint: item.reorderPoint,
         status: item.status,
         stock: item.stock?.actualQuantity ?? 0,
+        imageUrl: item.imageUrl,
         category: item.category
           ? {
               id: item.category.id.toString(),
@@ -730,6 +735,7 @@ export async function getProductDetail(req: Request, res: Response) {
         reorderPoint: product.reorderPoint,
         status: product.status,
         stock: product.stock?.actualQuantity ?? 0,
+        imageUrl: product.imageUrl,
         category: product.category
           ? {
               id: product.category.id.toString(),
@@ -897,6 +903,7 @@ export async function updateProduct(req: Request, res: Response) {
           ...(price !== undefined ? { price } : {}),
           ...(reorderPoint !== undefined ? { reorderPoint } : {}),
           ...(parsed.data.status !== undefined ? { status: parsed.data.status } : {}),
+          ...(parsed.data.imageUrl !== undefined ? { imageUrl: parsed.data.imageUrl || null } : {}),
         },
         include: {
           category: true,
@@ -930,6 +937,7 @@ export async function updateProduct(req: Request, res: Response) {
         reorderPoint: updated.reorderPoint,
         status: updated.status,
         stock: updated.stock?.actualQuantity ?? 0,
+        imageUrl: updated.imageUrl,
         category: updated.category
           ? {
               id: updated.category.id.toString(),
@@ -1108,3 +1116,91 @@ export async function activateProduct(req: Request, res: Response) {
     });
   }
 }
+
+/* =========================
+   UPLOAD PRODUCT IMAGE
+========================= */
+
+export async function uploadProductImageHandler(req: Request, res: Response) {
+  try {
+    const authUser = req.authUser;
+    const merchantId = getMerchantIdFromHeader(req);
+    const productIdRaw = getSingleParam(req.params.id);
+
+    if (!authUser) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
+    if (!merchantId || !productIdRaw || !/^\d+$/.test(productIdRaw)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Data request tidak valid',
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'File gambar tidak ditemukan',
+      });
+    }
+
+    const productId = BigInt(productIdRaw);
+    const userId = BigInt(authUser.userId);
+
+    const product = await prisma.product.findFirst({
+      where: {
+        id: productId,
+        merchantId,
+      },
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Produk tidak ditemukan',
+      });
+    }
+
+    // Generate URL path untuk gambar
+    const imageUrl = `/uploads/products/${req.file.filename}`;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.product.update({
+        where: { id: productId },
+        data: { imageUrl },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          merchantId,
+          userId,
+          action: 'UPLOAD_PRODUCT_IMAGE',
+          entity: 'Product',
+          entityId: result.id,
+          description: `Gambar produk ${result.name} berhasil diupload`,
+        },
+      });
+
+      return result;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Gambar produk berhasil diupload',
+      data: {
+        id: updated.id.toString(),
+        imageUrl: updated.imageUrl,
+      },
+    });
+  } catch (error) {
+    console.error('uploadProductImageHandler error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Terjadi kesalahan server',
+    });
+  }
+}

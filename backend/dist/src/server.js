@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
+const path_1 = __importDefault(require("path")); // Tambahkan import path
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const merchant_routes_1 = __importDefault(require("./routes/merchant.routes"));
 const user_management_routes_1 = __importDefault(require("./routes/user-management.routes"));
@@ -23,6 +24,8 @@ app.use((0, cors_1.default)({
 }));
 app.use(express_1.default.json());
 app.use((0, cookie_parser_1.default)());
+// Serve static files untuk uploads
+app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
 app.get('/api/health', (_req, res) => {
     res.status(200).json({
         success: true,

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { requireRole } from '../middlewares/role.middleware';
+import { uploadProductImage } from '../middleware/upload';
 import {
   createCategory,
   createProduct,
@@ -16,6 +17,7 @@ import {
   updateCategory,
   updateProduct,
   updateUnit,
+  uploadProductImageHandler,
 } from '../controllers/master-data.controller';
 
 const router = Router();
@@ -101,6 +103,14 @@ router.get(
 );
 
 // Specific routes MUST come before general :id routes for correct matching
+router.post(
+  '/products/:id/upload-image',
+  authMiddleware,
+  requireRole(['Owner', 'Gudang']),
+  uploadProductImage.single('image'),
+  uploadProductImageHandler
+);
+
 router.patch(
   '/products/:id/deactivate',
   authMiddleware,

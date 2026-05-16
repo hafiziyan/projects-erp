@@ -19,7 +19,7 @@ Beberapa model utama dalam database:
 - `User`: Menyimpan data pengguna global.
 - `Merchant`: Data entitas bisnis/toko (Sesuai PRD, Merchant berfungsi sebagai representasi **Branch/Cabang**).
 - `MerchantUser`: Relasi antara User, Merchant, dan Role untuk mendukung akses Multi-Branch.
-- `Product`, `Category`, `Unit`: Manajemen produk.
+- `Product`, `Category`, `Unit`: Manajemen produk dengan dukungan upload gambar produk (`imageUrl`).
 - `Stock`: Manajemen inventaris dengan pelacakan presisi (`actualQuantity` & `reservedQuantity`).
 - `StockMutation`: Pencatatan log rekam jejak keluar masuk stok (Audit Trail Inventaris).
 - `TransferRequest` & `TransferItem`: Siklus distribusi barang antar cabang (Pusat ke Cabang).
@@ -38,6 +38,7 @@ Beberapa model utama dalam database:
      FRONTEND_URL="http://localhost:3000"
      PORT=5000
      ```
+   - **File Storage**: Gambar produk disimpan di folder `backend/uploads/products/`. Folder ini akan dibuat otomatis saat aplikasi pertama kali dijalankan. Pastikan folder memiliki permission write.
 5. **Database Initialization**:
    - Pastikan MySQL berjalan.
    - Jalankan `npx prisma db push` di folder `backend`.
@@ -59,6 +60,7 @@ Beberapa model utama dalam database:
 - `/api/sales`: Transaksi POS.
 - `/api/dashboard`: Summary metrics dan analytics.
 - `/api/master`: Category dan Unit produk.
+- `/api/master/products/:id/upload-image`: Upload gambar produk (multipart/form-data, max 5MB).
 
 ## Advanced Dashboard Features
 - **Sales Analytics**: Visualisasi tren penjualan bulanan menggunakan ApexCharts.
@@ -68,14 +70,17 @@ Beberapa model utama dalam database:
 
 ## Sales & POS Module (Smart POS)
 - **Split-Screen Interface**: Layout khusus Terminal Kasir dengan katalog produk di kiri dan kontrol keranjang di kanan.
+- **Visual Product Catalog**: Produk ditampilkan dengan gambar visual (jika tersedia) dalam card layout yang responsif. Hover effect dengan zoom animation untuk pengalaman visual yang lebih baik.
 - **Offline-First Synchronization**: Kapasitas menyimpan transaksi di lokal (IndexedDB) dan sinkronisasi ke server (menyelesaikan PRD `POS-03`). Flag `isOffline` mencegah bentrok data.
 - **Persistent Hydrated Cart**: State keranjang POS dilindungi dengan `localStorage` sinkron (Mencegah produk hilang dari keranjang ketika kasir berpindah halaman/refresh).
 - **Dynamic Filtering**: Filter produk berdasarkan kategori dan pencarian real-time (Nama/SKU).
 - **Transaction History**: Pencatatan riwayat lengkap dengan filter dan status (`completed`, `voided`, `synced`).
 - **Role-Based Access**: Dioptimalkan untuk role `Owner` dan `Kasir` untuk membatasi fitur-fitur kritikal.
+- **Snapshot Mechanism**: Menyimpan snapshot nama produk, SKU, dan harga pada saat transaksi untuk mencegah perubahan retroaktif dari master data.
 
 ## Inventory & Distribution Module
 - **Data Table Layout (Professional Design)**: Perubahan *list-view* kardus menjadi Data Table modern dengan pemisahan *Product Info*, *Pricing*, dan visualisasi hirarki Stok.
+- **Product Image Management**: Fitur upload gambar produk dengan preview real-time. Mendukung format JPG/PNG dengan maksimal ukuran 5MB. Gambar disimpan di folder `/uploads/products/` dengan nama file unik berbasis timestamp.
 - **Tracking & Allocation**: Pemisahan visual indikator `actualQuantity` (Stok Fisik) dan `reservedQuantity` (Stok yang dialokasikan) secara *real-time*. Action "Adjust" tertata di dalam *Expandable Auto-row* sehingga tidak menutup visibilitas layar utama (melampaui UX Modal).
 - **Stock Mutations Audit Trail**: Setiap perubahan stok wajib dicatat ke `StockMutation` untuk akuntabilitas.
 - **Transfer Request Workflow (Pusat <-> Cabang)**: Mengakomodasi `TransferRequest` multi-step lifecycle (`pending` -> `approved` -> `shipped` -> `received`).

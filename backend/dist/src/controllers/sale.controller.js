@@ -11,6 +11,9 @@ const createSaleSchema = zod_1.z.object({
     items: zod_1.z.array(zod_1.z.object({
         productId: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]),
         quantity: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]),
+        productNameSnapshot: zod_1.z.string().optional(),
+        skuSnapshot: zod_1.z.string().nullable().optional(),
+        priceSnapshot: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]).optional(),
     })).min(1, 'Minimal ada 1 item penjualan'),
 });
 function getMerchantIdFromHeader(req) {
@@ -95,6 +98,9 @@ async function createSale(req, res) {
             return {
                 productId,
                 quantity,
+                productNameSnapshot: item.productNameSnapshot,
+                skuSnapshot: item.skuSnapshot ?? null,
+                priceSnapshot: parseNumberValue(item.priceSnapshot),
             };
         });
         if (normalizedItems.some((item) => item.productId === null || item.quantity === null || item.quantity <= 0)) {
@@ -103,7 +109,7 @@ async function createSale(req, res) {
                 message: 'Data item penjualan tidak valid',
             });
         }
-        const productIds = normalizedItems.map((item) => BigInt(item.productId));
+        const productIds = Array.from(new Set(normalizedItems.map((item) => item.productId))).map((productId) => BigInt(productId));
         const products = await prisma_1.prisma.product.findMany({
             where: {
                 merchantId,
@@ -116,23 +122,31 @@ async function createSale(req, res) {
                 stock: true,
             },
         });
-        if (products.length !== normalizedItems.length) {
+        if (products.length !== productIds.length) {
             return res.status(404).json({
                 success: false,
                 message: 'Ada produk yang tidak ditemukan atau tidak aktif',
             });
         }
         let subtotal = 0;
+        const requestedQuantityByProductId = new Map();
+        for (const item of normalizedItems) {
+            const productId = String(item.productId);
+            requestedQuantityByProductId.set(productId, (requestedQuantityByProductId.get(productId) || 0) + item.quantity);
+        }
+        for (const product of products) {
+            const requestedQuantity = requestedQuantityByProductId.get(product.id.toString()) || 0;
+            if (!product.stock) {
+                throw new Error('STOCK_NOT_FOUND');
+            }
+            if (product.stock.actualQuantity < requestedQuantity) {
+                throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
+            }
+        }
         const detailedItems = normalizedItems.map((item) => {
             const product = products.find((p) => p.id.toString() === String(item.productId));
             if (!product) {
                 throw new Error('PRODUCT_NOT_FOUND');
-            }
-            if (!product.stock) {
-                throw new Error('STOCK_NOT_FOUND');
-            }
-            if (product.stock.actualQuantity < item.quantity) {
-                throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
             }
             const price = Number(product.price);
             const itemSubtotal = price * item.quantity;
@@ -142,6 +156,8 @@ async function createSale(req, res) {
                 quantity: item.quantity,
                 price,
                 subtotal: itemSubtotal,
+                productNameSnapshot: item.productNameSnapshot || product.name,
+                skuSnapshot: item.skuSnapshot ?? product.sku,
             };
         });
         if (discountAmount > subtotal) {
@@ -164,7 +180,10 @@ async function createSale(req, res) {
                     paymentMethod: parsed.data.paymentMethod,
                 },
             });
+            const stockQuantityByProductId = new Map();
             for (const item of detailedItems) {
+                const productId = item.product.id.toString();
+                stockQuantityByProductId.set(productId, (stockQuantityByProductId.get(productId) || 0) + item.quantity);
                 await tx.saleItem.create({
                     data: {
                         saleId: sale.id,
@@ -172,15 +191,21 @@ async function createSale(req, res) {
                         quantity: item.quantity,
                         price: item.price,
                         subtotal: item.subtotal,
+                        ...{
+                            productNameSnapshot: item.productNameSnapshot,
+                            skuSnapshot: item.skuSnapshot,
+                        },
                     },
                 });
+            }
+            for (const [productId, quantity] of stockQuantityByProductId) {
                 await tx.stock.update({
                     where: {
-                        productId: item.product.id,
+                        productId: BigInt(productId),
                     },
                     data: {
                         actualQuantity: {
-                            decrement: item.quantity,
+                            decrement: quantity,
                         },
                     },
                 });
@@ -227,14 +252,19 @@ async function createSale(req, res) {
                         email: saleDetail.cashier.email,
                     }
                     : null,
-                items: saleDetail?.items.map((item) => ({
-                    saleItemId: item.id.toString(),
-                    productId: item.product.id.toString(),
-                    productName: item.product.name,
-                    quantity: item.quantity,
-                    price: Number(item.price),
-                    subtotal: Number(item.subtotal),
-                })) ?? [],
+                items: saleDetail?.items.map((item) => {
+                    const snapshotItem = item;
+                    return {
+                        saleItemId: item.id.toString(),
+                        productId: item.product.id.toString(),
+                        productName: snapshotItem.productNameSnapshot || item.product.name,
+                        sku: snapshotItem.skuSnapshot ?? item.product.sku,
+                        quantity: item.quantity,
+                        price: Number(item.price),
+                        subtotal: Number(item.subtotal),
+                        imageUrl: item.product.imageUrl,
+                    };
+                }) ?? [],
                 createdAt: result.createdAt,
             },
         });
@@ -374,14 +404,19 @@ async function getSaleDetail(req, res) {
                         email: sale.cashier.email,
                     }
                     : null,
-                items: sale.items.map((item) => ({
-                    saleItemId: item.id.toString(),
-                    productId: item.product.id.toString(),
-                    productName: item.product.name,
-                    quantity: item.quantity,
-                    price: Number(item.price),
-                    subtotal: Number(item.subtotal),
-                })),
+                items: sale.items.map((item) => {
+                    const snapshotItem = item;
+                    return {
+                        saleItemId: item.id.toString(),
+                        productId: item.product.id.toString(),
+                        productName: snapshotItem.productNameSnapshot || item.product.name,
+                        sku: snapshotItem.skuSnapshot ?? item.product.sku,
+                        quantity: item.quantity,
+                        price: Number(item.price),
+                        subtotal: Number(item.subtotal),
+                        imageUrl: item.product.imageUrl,
+                    };
+                }),
                 createdAt: sale.createdAt,
             },
         });

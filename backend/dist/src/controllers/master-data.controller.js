@@ -14,6 +14,7 @@ exports.getProductDetail = getProductDetail;
 exports.updateProduct = updateProduct;
 exports.deactivateProduct = deactivateProduct;
 exports.activateProduct = activateProduct;
+exports.uploadProductImageHandler = uploadProductImageHandler;
 const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const createCategorySchema = zod_1.z.object({
@@ -36,6 +37,7 @@ const createProductSchema = zod_1.z.object({
     price: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]),
     reorderPoint: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]).optional(),
     initialStock: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]).optional(),
+    imageUrl: zod_1.z.string().optional(),
 });
 const updateProductSchema = zod_1.z.object({
     name: zod_1.z.string().min(2, 'Nama produk minimal 2 karakter').optional(),
@@ -45,6 +47,7 @@ const updateProductSchema = zod_1.z.object({
     price: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]).optional(),
     reorderPoint: zod_1.z.union([zod_1.z.string(), zod_1.z.number()]).optional(),
     status: zod_1.z.enum(['active', 'inactive']).optional(),
+    imageUrl: zod_1.z.string().optional(),
 });
 function getMerchantIdFromHeader(req) {
     const merchantIdHeader = req.headers['x-merchant-id'];
@@ -483,6 +486,7 @@ async function createProduct(req, res) {
                     price,
                     reorderPoint,
                     status: 'active',
+                    imageUrl: parsed.data.imageUrl || null,
                 },
                 include: {
                     category: true,
@@ -522,6 +526,7 @@ async function createProduct(req, res) {
                 reorderPoint: result.product.reorderPoint,
                 status: result.product.status,
                 stock: result.stock.actualQuantity,
+                imageUrl: result.product.imageUrl,
                 category: result.product.category
                     ? {
                         id: result.product.category.id.toString(),
@@ -602,6 +607,7 @@ async function getProducts(req, res) {
                 reorderPoint: item.reorderPoint,
                 status: item.status,
                 stock: item.stock?.actualQuantity ?? 0,
+                imageUrl: item.imageUrl,
                 category: item.category
                     ? {
                         id: item.category.id.toString(),
@@ -663,6 +669,7 @@ async function getProductDetail(req, res) {
                 reorderPoint: product.reorderPoint,
                 status: product.status,
                 stock: product.stock?.actualQuantity ?? 0,
+                imageUrl: product.imageUrl,
                 category: product.category
                     ? {
                         id: product.category.id.toString(),
@@ -810,6 +817,7 @@ async function updateProduct(req, res) {
                     ...(price !== undefined ? { price } : {}),
                     ...(reorderPoint !== undefined ? { reorderPoint } : {}),
                     ...(parsed.data.status !== undefined ? { status: parsed.data.status } : {}),
+                    ...(parsed.data.imageUrl !== undefined ? { imageUrl: parsed.data.imageUrl || null } : {}),
                 },
                 include: {
                     category: true,
@@ -840,6 +848,7 @@ async function updateProduct(req, res) {
                 reorderPoint: updated.reorderPoint,
                 status: updated.status,
                 stock: updated.stock?.actualQuantity ?? 0,
+                imageUrl: updated.imageUrl,
                 category: updated.category
                     ? {
                         id: updated.category.id.toString(),
@@ -995,6 +1004,82 @@ async function activateProduct(req, res) {
     }
     catch (error) {
         console.error('activateProduct error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Terjadi kesalahan server',
+        });
+    }
+}
+/* =========================
+   UPLOAD PRODUCT IMAGE
+========================= */
+async function uploadProductImageHandler(req, res) {
+    try {
+        const authUser = req.authUser;
+        const merchantId = getMerchantIdFromHeader(req);
+        const productIdRaw = getSingleParam(req.params.id);
+        if (!authUser) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized',
+            });
+        }
+        if (!merchantId || !productIdRaw || !/^\d+$/.test(productIdRaw)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Data request tidak valid',
+            });
+        }
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'File gambar tidak ditemukan',
+            });
+        }
+        const productId = BigInt(productIdRaw);
+        const userId = BigInt(authUser.userId);
+        const product = await prisma_1.prisma.product.findFirst({
+            where: {
+                id: productId,
+                merchantId,
+            },
+        });
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: 'Produk tidak ditemukan',
+            });
+        }
+        // Generate URL path untuk gambar
+        const imageUrl = `/uploads/products/${req.file.filename}`;
+        const updated = await prisma_1.prisma.$transaction(async (tx) => {
+            const result = await tx.product.update({
+                where: { id: productId },
+                data: { imageUrl },
+            });
+            await tx.auditLog.create({
+                data: {
+                    merchantId,
+                    userId,
+                    action: 'UPLOAD_PRODUCT_IMAGE',
+                    entity: 'Product',
+                    entityId: result.id,
+                    description: `Gambar produk ${result.name} berhasil diupload`,
+                },
+            });
+            return result;
+        });
+        return res.status(200).json({
+            success: true,
+            message: 'Gambar produk berhasil diupload',
+            data: {
+                id: updated.id.toString(),
+                imageUrl: updated.imageUrl,
+            },
+        });
+    }
+    catch (error) {
+        console.error('uploadProductImageHandler error:', error);
         return res.status(500).json({
             success: false,
             message: 'Terjadi kesalahan server',
